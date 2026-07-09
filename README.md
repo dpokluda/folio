@@ -127,6 +127,19 @@ Windows build.)
 
 - **Open a file** — `File ▸ Open…` (`Ctrl/Cmd+O`). Recently opened files appear under
   `File ▸ Open Recent`.
+- **Open from the command line** — launch Folio with a file path and it opens that document
+  on startup (or focuses the running window and opens it):
+
+  ```sh
+  # from a dev checkout
+  npm start -- path/to/notes.md
+
+  # or a packaged build
+  Folio path/to/notes.md
+  ```
+
+  You can also drop a file onto the app (or `Folio.exe`), or double-click a file associated
+  with Folio. When launched with no file, Folio shows the welcome document.
 - **Toggle source mode** — `View ▸ Toggle Source Code Mode` (`Ctrl/Cmd+/`), or the
   **`</>` Source** button in the status bar. The themed CodeMirror editor appears; toggle
   back (the button reads **Exit Source**) to re-render the preview.

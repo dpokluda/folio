@@ -12,6 +12,7 @@ let currentPath = null; // absolute path of the open file, or null for an untitl
 let currentName = 'Welcome'; // display name when untitled
 let isDirty = false;
 let forceClose = false;
+let pendingOpenPath = null; // file to open once the renderer is ready (startup / macOS open-file)
 
 const REPO_URL = 'https://github.com/dpokluda/Folio';
 
@@ -164,6 +165,31 @@ function send(channel, payload) {
 // ---------------------------------------------------------------------------
 // File operations
 // ---------------------------------------------------------------------------
+
+// Extract a file path to open from a process argv array. Skips the executable,
+// the app-path arg (present as "." or the project dir when running unpackaged),
+// and any flags; returns the first argument that resolves to an existing file.
+function fileArgFrom(argv) {
+  const args = argv.slice(app.isPackaged ? 1 : 2);
+  for (const a of args) {
+    if (!a || a.startsWith('-')) continue;
+    try {
+      const resolved = path.resolve(a);
+      if (fs.existsSync(resolved) && fs.statSync(resolved).isFile()) return resolved;
+    } catch (_) {
+      /* ignore and keep scanning */
+    }
+  }
+  return null;
+}
+
+// Open a file requested from outside the app (CLI arg on a running instance,
+// or macOS Finder "open-file"), honoring unsaved changes first.
+async function openExternalPath(filePath) {
+  if (!(await confirmDiscardIfDirty())) return;
+  loadFile(filePath);
+}
+
 async function loadFile(filePath) {
   try {
     const content = fs.readFileSync(filePath, 'utf8');
@@ -342,12 +368,37 @@ function showAbout() {
 // IPC from renderer
 // ---------------------------------------------------------------------------
 ipcMain.handle('get-init', () => {
-  let initialContent = '';
-  try {
-    initialContent = fs.readFileSync(samplePath(), 'utf8');
-  } catch (_) {
-    initialContent = '# Welcome to Folio\n\nCreate or open a Markdown file to get started.\n';
+  let document = null;
+
+  // If Folio was launched with a file path (CLI arg or macOS open-file), open
+  // that file instead of the welcome document.
+  if (pendingOpenPath) {
+    const target = pendingOpenPath;
+    pendingOpenPath = null;
+    try {
+      const content = fs.readFileSync(target, 'utf8');
+      currentPath = target;
+      currentName = path.basename(target);
+      store.addRecent(target);
+      setDirty(false);
+      rebuildMenu();
+      updateTitle();
+      document = { path: target, content, name: currentName };
+    } catch (err) {
+      dialog.showErrorBox('Folio — cannot open file', `${target}\n\n${err.message}`);
+    }
   }
+
+  if (!document) {
+    let initialContent = '';
+    try {
+      initialContent = fs.readFileSync(samplePath(), 'utf8');
+    } catch (_) {
+      initialContent = '# Welcome to Folio\n\nCreate or open a Markdown file to get started.\n';
+    }
+    document = { path: null, content: initialContent, name: 'Welcome' };
+  }
+
   return {
     themesBaseUrl: pathToFileURL(themesDir() + path.sep).href,
     themes: listThemes(),
@@ -357,7 +408,7 @@ ipcMain.handle('get-init', () => {
       outlineVisible: store.get('outlineVisible'),
       zoom: store.get('zoom'),
     },
-    document: { path: null, content: initialContent, name: 'Welcome' },
+    document,
   };
 });
 
@@ -384,10 +435,24 @@ if (!gotLock) {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.focus();
-      const fileArg = argv.find((a) => /\.(md|markdown|mdown|mkd|txt)$/i.test(a));
-      if (fileArg && fs.existsSync(fileArg)) loadFile(fileArg);
+      const fileArg = fileArgFrom(argv);
+      if (fileArg) openExternalPath(fileArg);
     }
   });
+
+  // macOS: files opened via Finder / `open` arrive through this event, which
+  // can fire before the app is ready.
+  app.on('open-file', (e, filePath) => {
+    e.preventDefault();
+    if (mainWindow) {
+      openExternalPath(filePath);
+    } else {
+      pendingOpenPath = filePath;
+    }
+  });
+
+  // Windows/Linux: a file path passed on the command line at launch.
+  pendingOpenPath = fileArgFrom(process.argv);
 
   app.whenReady().then(() => {
     createWindow();
