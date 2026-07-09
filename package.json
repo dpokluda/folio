@@ -14,8 +14,9 @@
     "build:renderer": "node build.js",
     "watch:renderer": "node build.js --watch",
     "start": "npm run build:renderer && electron .",
-    "dist": "npm run build:renderer && electron-builder",
-    "dist:win": "npm run build:renderer && electron-builder --win",
+    "prepare:wincodesign": "node scripts/prepare-wincodesign.js",
+    "dist": "npm run build:renderer && npm run prepare:wincodesign && electron-builder",
+    "dist:win": "npm run build:renderer && npm run prepare:wincodesign && electron-builder --win",
     "dist:mac": "npm run build:renderer && electron-builder --mac",
     "dist:linux": "npm run build:renderer && electron-builder --linux"
   },
