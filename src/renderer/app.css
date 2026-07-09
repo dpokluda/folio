@@ -1,0 +1,267 @@
+/* ==========================================================================
+   Folio app chrome + CodeMirror 6 -> Typora compatibility layer.
+
+   Loaded BEFORE the active theme so the theme wins on shared selectors
+   (#write, #typora-source, body backgrounds). Everything here is scoped to
+   Folio's own chrome (#folio-*), the CodeMirror 6 element roles (.cm-*), or
+   highlight.js token colours — none of which the Typora themes target — so
+   the two stylesheets coexist without fighting.
+   ========================================================================== */
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden;
+  /* Paint the page background from the active theme, exactly as Typora's base
+     stylesheet does. Fluent sets --bg-color:#fff (white everywhere); the A4 /
+     Word themes set it to a soft grey backdrop behind the white #write sheet.
+     Without this, the Electron window's own background colour would show. */
+  background-color: var(--bg-color, #ffffff);
+}
+
+#folio-root {
+  display: flex;
+  flex-direction: row;
+  height: 100vh;
+  width: 100%;
+}
+
+/* --- main content area --------------------------------------------------- */
+#folio-main {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 100%;
+}
+
+/* Growing region that holds the preview + source editor (which overlap). */
+#folio-content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The rendered preview scroll container. #write centres inside it via the
+   theme's `margin: auto`. Background is intentionally transparent so the
+   theme's page backdrop (body / --bg-color) shows through. */
+#folio-preview {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.folio-scroll {
+  scrollbar-width: thin;
+}
+
+/* --- source editor host -------------------------------------------------- */
+/* The theme paints #typora-source white in source mode (.typora-sourceview-on);
+   we just make it fill the pane and host the CodeMirror scroller. */
+#typora-source {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+#typora-source[hidden] {
+  display: none;
+}
+
+/* CodeMirror 6 elements are made transparent so the theme background shows
+   through, mirroring how Typora's themes expect a transparent editor. */
+#typora-source .cm-editor {
+  height: 100%;
+  background: transparent;
+}
+#typora-source .cm-editor.cm-focused {
+  outline: none;
+}
+#typora-source .cm-scroller {
+  overflow: auto;
+  font-family: var(--monospace, var(--mono, ui-monospace, "SFMono-Regular", "Cascadia Code", Menlo, Consolas, monospace));
+  font-size: 0.95em;
+  line-height: 1.6;
+}
+#typora-source .cm-content {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 24px 8px 40vh;
+  caret-color: currentColor;
+}
+#typora-source .cm-gutters {
+  background: transparent;
+  border: none;
+}
+/* Keep the active line subtle/transparent — matches the themes' grey-bar-free
+   source mode where `.CodeMirror-activeline-background` is flattened. */
+#typora-source .cm-activeLine {
+  background: transparent;
+}
+#typora-source .cm-selectionBackground,
+#typora-source .cm-content ::selection {
+  background: rgba(80, 130, 220, 0.22);
+}
+#typora-source .cm-cursor {
+  border-left-color: currentColor;
+}
+
+/* --- outline sidebar ----------------------------------------------------- */
+#folio-outline {
+  flex: 0 0 260px;
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  background: #f6f7f9;
+  border-right: 1px solid #e2e4e8;
+  color: #333;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 13px;
+  user-select: none;
+}
+#folio-outline[hidden] {
+  display: none;
+}
+.folio-outline-title {
+  padding: 12px 16px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #8a8f98;
+}
+#folio-outline-list {
+  display: flex;
+  flex-direction: column;
+  padding-bottom: 20px;
+}
+.outline-item {
+  display: block;
+  padding: 3px 16px;
+  color: #3a3f45;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.outline-item:hover {
+  background: #e9ebef;
+  color: #111;
+}
+.outline-h1 { padding-left: 16px; font-weight: 600; }
+.outline-h2 { padding-left: 28px; }
+.outline-h3 { padding-left: 40px; }
+.outline-h4 { padding-left: 52px; font-size: 12px; }
+.outline-h5 { padding-left: 64px; font-size: 12px; }
+.outline-h6 { padding-left: 76px; font-size: 12px; color: #6b7078; }
+
+/* ==========================================================================
+   Status bar (Typora-style): mode toggles on the left, live stats on the right.
+   Scoped to #folio-statusbar so no theme rules touch it; uses neutral chrome
+   styling that suits the bundled light themes.
+   ========================================================================== */
+#folio-statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  background: #f6f7f9;
+  border-top: 1px solid #e2e4e8;
+  color: #5c626b;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.folio-status-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.folio-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.folio-status-btn:hover {
+  background: #e6e8ec;
+  color: #24282e;
+}
+.folio-status-btn.active {
+  background: #e1e6f5;
+  color: #2b4fb0;
+}
+.folio-status-btn .folio-ico {
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+#folio-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+#folio-stats .folio-stat {
+  white-space: nowrap;
+}
+#folio-stats .folio-stat-sep {
+  opacity: 0.4;
+}
+
+/* ==========================================================================
+   highlight.js token colours (GitHub-light palette).
+
+   Only token *colours* are defined — not the `.hljs` block background/padding —
+   so the active theme keeps control of the code-fence box while syntax still
+   renders in colour (as the Word themes intend for code).
+   ========================================================================== */
+.hljs-comment,
+.hljs-quote { color: #6a737d; font-style: italic; }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-type,
+.hljs-doctag { color: #d73a49; }
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-meta-string { color: #032f62; }
+.hljs-number,
+.hljs-literal,
+.hljs-variable,
+.hljs-template-variable,
+.hljs-attr,
+.hljs-attribute { color: #005cc5; }
+.hljs-title,
+.hljs-section,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class { color: #6f42c1; }
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-link { color: #e36209; }
+.hljs-emphasis { font-style: italic; }
+.hljs-strong { font-weight: 700; }
+.hljs-deletion { color: #b31d28; background: #ffeef0; }
+.hljs-addition { background: #f0fff4; }

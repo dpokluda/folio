@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self' 'unsafe-inline' file: data: blob:; img-src 'self' file: data: https: blob:; font-src 'self' file: data:; style-src 'self' 'unsafe-inline' file:; script-src 'self' 'unsafe-inline';"
+    />
+    <title>Folio</title>
+
+    <!-- App chrome + CodeMirror compatibility layer (loaded first so the theme wins on shared selectors). -->
+    <link rel="stylesheet" href="app.css" />
+    <!-- Active Typora-compatible theme; href is set at runtime and swapped by the Themes menu. -->
+    <link id="theme-style" rel="stylesheet" href="" />
+  </head>
+  <body>
+    <div id="folio-root">
+      <aside id="folio-outline" hidden aria-label="Document outline">
+        <div class="folio-outline-title">Outline</div>
+        <nav id="folio-outline-list"></nav>
+      </aside>
+
+      <main id="folio-main">
+        <div id="folio-content">
+          <!-- Rendered preview. Content is injected into #write (Typora's page container). -->
+          <div id="folio-preview" class="folio-scroll">
+            <div id="write"></div>
+          </div>
+
+          <!-- Source editor. CodeMirror 6 mounts here; themes target #typora-source .CodeMirror*. -->
+          <div id="typora-source" hidden></div>
+        </div>
+
+        <!-- Status bar: mode toggles + live document stats. -->
+        <footer id="folio-statusbar">
+          <div class="folio-status-group">
+            <button id="btn-outline" class="folio-status-btn" type="button"
+              title="Toggle Outline (Ctrl/Cmd+Shift+O)">
+              <span class="folio-ico">&#9776;</span><span>Outline</span>
+            </button>
+            <button id="btn-source" class="folio-status-btn" type="button"
+              title="Toggle Source Code Mode (Ctrl/Cmd+/)">
+              <span class="folio-ico">&lt;/&gt;</span><span id="btn-source-label">Source</span>
+            </button>
+          </div>
+          <div id="folio-stats" aria-live="polite"></div>
+        </footer>
+      </main>
+    </div>
+
+    <script src="bundle.js"></script>
+  </body>
+</html>

@@ -1,0 +1,19 @@
+/* ==========================================================================
+   microsoft-word/word-page-letter.css  —  US Letter page geometry (Word margins)
+   --------------------------------------------------------------------------
+   Shared building block (not a selectable theme). Sets only the page width
+   and margins; the sheet look + typography come from word-type.css.
+   US Letter = 8.5in (612pt); Word margins: 1in top/bottom, 0.75in sides.
+   ========================================================================== */
+
+#write {
+    max-width: 612pt;
+    margin: 28px auto 72px;
+    padding: 72pt 54pt 96pt;
+}
+
+@media only screen and (min-width: 1400px) { #write { max-width: 612pt; } }
+@media only screen and (min-width: 1800px) { #write { max-width: 612pt; } }
+
+/* Source-code mode: plain full-width editor — no page look. */
+#typora-source .CodeMirror-lines { max-width: none; }

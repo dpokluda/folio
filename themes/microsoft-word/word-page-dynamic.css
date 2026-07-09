@@ -1,0 +1,20 @@
+/* ==========================================================================
+   microsoft-word/word-page-dynamic.css  —  full-window page geometry
+   --------------------------------------------------------------------------
+   Shared building block (not a selectable theme). The sheet fills the app
+   window with an equal margin on all four sides and grows/shrinks as the
+   window is resized. Sheet look + typography come from word-type.css.
+   ========================================================================== */
+
+#write {
+    max-width: none !important;
+    width: auto !important;
+    align-self: stretch;              /* defensive: fill if parent is flex   */
+    margin: 36px !important;          /* equal frame on all four sides       */
+    padding: 60pt 54pt 84pt;          /* Word-like inner margins             */
+}
+
+@media only screen and (min-width: 1400px) { #write { max-width: none !important; } }
+@media only screen and (min-width: 1800px) { #write { max-width: none !important; } }
+
+#typora-source .CodeMirror-lines { max-width: none; }
