@@ -21,13 +21,30 @@
       </aside>
 
       <main id="folio-main">
-        <!-- Rendered preview. Content is injected into #write (Typora's page container). -->
-        <div id="folio-preview" class="folio-scroll">
-          <div id="write"></div>
+        <div id="folio-content">
+          <!-- Rendered preview. Content is injected into #write (Typora's page container). -->
+          <div id="folio-preview" class="folio-scroll">
+            <div id="write"></div>
+          </div>
+
+          <!-- Source editor. CodeMirror 6 mounts here; themes target #typora-source .CodeMirror*. -->
+          <div id="typora-source" hidden></div>
         </div>
 
-        <!-- Source editor. CodeMirror 6 mounts here; themes target #typora-source .CodeMirror*. -->
-        <div id="typora-source" hidden></div>
+        <!-- Status bar: mode toggles + live document stats. -->
+        <footer id="folio-statusbar">
+          <div class="folio-status-group">
+            <button id="btn-outline" class="folio-status-btn" type="button"
+              title="Toggle Outline (Ctrl/Cmd+Shift+O)">
+              <span class="folio-ico">&#9776;</span><span>Outline</span>
+            </button>
+            <button id="btn-source" class="folio-status-btn" type="button"
+              title="Toggle Source Code Mode (Ctrl/Cmd+/)">
+              <span class="folio-ico">&lt;/&gt;</span><span id="btn-source-label">Source</span>
+            </button>
+          </div>
+          <div id="folio-stats" aria-live="polite"></div>
+        </footer>
       </main>
     </div>
 

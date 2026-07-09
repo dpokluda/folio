@@ -67,6 +67,10 @@ const $source = document.getElementById('typora-source');
 const $outline = document.getElementById('folio-outline');
 const $outlineList = document.getElementById('folio-outline-list');
 const $themeLink = document.getElementById('theme-style');
+const $stats = document.getElementById('folio-stats');
+const $btnOutline = document.getElementById('btn-outline');
+const $btnSource = document.getElementById('btn-source');
+const $btnSourceLabel = document.getElementById('btn-source-label');
 
 // ---------------------------------------------------------------------------
 // CodeMirror editor
@@ -76,6 +80,7 @@ function createEditor(initialText) {
     if (v.docChanged && state.sourceMode) {
       state.docText = v.state.doc.toString();
       recomputeDirty();
+      updateStats();
     }
   });
 
@@ -121,6 +126,7 @@ function renderPreview() {
   $write.innerHTML = html;
   wireLinks();
   buildOutline();
+  updateStats();
 }
 
 function wireLinks() {
@@ -166,8 +172,38 @@ function buildOutline() {
 }
 
 // ---------------------------------------------------------------------------
-// Mode toggling
+// Status bar: live document stats + mode-toggle buttons
 // ---------------------------------------------------------------------------
+function computeStats(text) {
+  const t = text || '';
+  const words = (t.match(/[^\s]+/g) || []).length;
+  const chars = [...t].length;
+  const lines = t.length ? t.split(/\r\n|\r|\n/).length : 0;
+  const readMin = Math.max(1, Math.round(words / 200));
+  return { words, chars, lines, readMin };
+}
+
+function updateStats() {
+  const s = computeStats(currentText());
+  const parts = [
+    `${s.words.toLocaleString()} ${s.words === 1 ? 'word' : 'words'}`,
+    `${s.chars.toLocaleString()} ${s.chars === 1 ? 'char' : 'chars'}`,
+    `${s.lines.toLocaleString()} ${s.lines === 1 ? 'line' : 'lines'}`,
+    `~${s.readMin} min read`,
+  ];
+  $stats.innerHTML = parts
+    .map((p) => `<span class="folio-stat">${p}</span>`)
+    .join('<span class="folio-stat-sep">·</span>');
+}
+
+function updateStatusButtons() {
+  $btnSource.classList.toggle('active', state.sourceMode);
+  $btnSourceLabel.textContent = state.sourceMode ? 'Exit Source' : 'Source';
+  $btnSource.title = state.sourceMode
+    ? 'Exit Source Code Mode (Ctrl/Cmd+/)'
+    : 'Toggle Source Code Mode (Ctrl/Cmd+/)';
+  $btnOutline.classList.toggle('active', state.outlineVisible);
+}
 function setSourceMode(on) {
   state.sourceMode = on;
   document.body.classList.toggle('typora-sourceview-on', on);
@@ -188,12 +224,14 @@ function setSourceMode(on) {
     $preview.hidden = false;
     renderPreview();
   }
+  updateStatusButtons();
   persistState();
 }
 
 function setOutlineVisible(on) {
   state.outlineVisible = on;
   $outline.hidden = !on;
+  updateStatusButtons();
   persistState();
 }
 
@@ -252,9 +290,11 @@ function loadDocument(doc) {
     if (!editor) createEditor(state.docText);
     else setEditorText(state.docText);
     requestAnimationFrame(() => editor && editor.requestMeasure());
+    updateStats();
   } else {
     renderPreview();
   }
+  updateStatusButtons();
   $preview.scrollTop = 0;
 }
 
@@ -328,6 +368,10 @@ async function boot() {
 
   // Honour a persisted source-mode preference.
   if (s.sourceMode) setSourceMode(true);
+
+  // Wire status-bar buttons.
+  $btnSource.addEventListener('click', () => setSourceMode(!state.sourceMode));
+  $btnOutline.addEventListener('click', () => setOutlineVisible(!state.outlineVisible));
 
   // Wire main -> renderer events.
   window.folioAPI.onCommand((payload) => handleCommand(payload && payload.name));

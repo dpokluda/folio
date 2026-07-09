@@ -42,6 +42,8 @@ the CSS themes I already use "just work."
 - **Syntax highlighting** of fenced code blocks with
   [highlight.js](https://highlightjs.org/).
 - **Document outline** sidebar generated from headings.
+- **Status bar** (Typora-style) with mode-toggle buttons (Outline, Source/Exit Source) and
+  live document stats: word, character and line counts plus an estimated reading time.
 - **File handling**: Open, Open Recent, Save, Save As, and **Export to PDF** (via Electron's
   `printToPDF`, honoring the A4 / US Letter page themes).
 - **Unsaved-changes tracking** with a title-bar indicator and a save prompt on open/close.
@@ -97,11 +99,13 @@ Build artifacts are written to `release/`.
 
 - **Open a file** — `File ▸ Open…` (`Ctrl/Cmd+O`). Recently opened files appear under
   `File ▸ Open Recent`.
-- **Toggle source mode** — `View ▸ Toggle Source Code Mode` (`Ctrl/Cmd+/`). The themed
-  CodeMirror editor appears; toggle back to re-render the preview.
+- **Toggle source mode** — `View ▸ Toggle Source Code Mode` (`Ctrl/Cmd+/`), or the
+  **`</>` Source** button in the status bar. The themed CodeMirror editor appears; toggle
+  back (the button reads **Exit Source**) to re-render the preview.
 - **Switch themes** — pick any theme from the **Themes** menu. Both the preview and the
   source editor restyle instantly; your choice is remembered.
-- **Outline** — `View ▸ Toggle Outline` (`Ctrl/Cmd+Shift+O`) shows a headings sidebar.
+- **Outline** — `View ▸ Toggle Outline` (`Ctrl/Cmd+Shift+O`), or the **Outline** button in
+  the status bar, shows a headings sidebar.
 - **Save** — `Ctrl/Cmd+S` (Save As: `Ctrl/Cmd+Shift+S`). An unsaved document shows a `•` in
   the title bar and prompts before you close or open another file.
 - **Export to PDF** — `File ▸ Export to PDF…`. The page size follows the active theme (A4 vs

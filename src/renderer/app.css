@@ -14,6 +14,11 @@ body {
   padding: 0;
   height: 100%;
   overflow: hidden;
+  /* Paint the page background from the active theme, exactly as Typora's base
+     stylesheet does. Fluent sets --bg-color:#fff (white everywhere); the A4 /
+     Word themes set it to a soft grey backdrop behind the white #write sheet.
+     Without this, the Electron window's own background colour would show. */
+  background-color: var(--bg-color, #ffffff);
 }
 
 #folio-root {
@@ -25,17 +30,26 @@ body {
 
 /* --- main content area --------------------------------------------------- */
 #folio-main {
-  position: relative;
+  display: flex;
+  flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
   height: 100%;
+}
+
+/* Growing region that holds the preview + source editor (which overlap). */
+#folio-content {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
 }
 
 /* The rendered preview scroll container. #write centres inside it via the
    theme's `margin: auto`. Background is intentionally transparent so the
    theme's page backdrop (body / --bg-color) shows through. */
 #folio-preview {
-  height: 100%;
+  position: absolute;
+  inset: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -48,7 +62,8 @@ body {
 /* The theme paints #typora-source white in source mode (.typora-sourceview-on);
    we just make it fill the pane and host the CodeMirror scroller. */
 #typora-source {
-  height: 100%;
+  position: absolute;
+  inset: 0;
   overflow: hidden;
 }
 
@@ -142,6 +157,76 @@ body {
 .outline-h4 { padding-left: 52px; font-size: 12px; }
 .outline-h5 { padding-left: 64px; font-size: 12px; }
 .outline-h6 { padding-left: 76px; font-size: 12px; color: #6b7078; }
+
+/* ==========================================================================
+   Status bar (Typora-style): mode toggles on the left, live stats on the right.
+   Scoped to #folio-statusbar so no theme rules touch it; uses neutral chrome
+   styling that suits the bundled light themes.
+   ========================================================================== */
+#folio-statusbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 8px;
+  box-sizing: border-box;
+  background: #f6f7f9;
+  border-top: 1px solid #e2e4e8;
+  color: #5c626b;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 12px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.folio-status-group {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.folio-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.folio-status-btn:hover {
+  background: #e6e8ec;
+  color: #24282e;
+}
+.folio-status-btn.active {
+  background: #e1e6f5;
+  color: #2b4fb0;
+}
+.folio-status-btn .folio-ico {
+  font-size: 12px;
+  line-height: 1;
+  opacity: 0.85;
+}
+
+#folio-stats {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-right: 6px;
+  font-variant-numeric: tabular-nums;
+}
+#folio-stats .folio-stat {
+  white-space: nowrap;
+}
+#folio-stats .folio-stat-sep {
+  opacity: 0.4;
+}
 
 /* ==========================================================================
    highlight.js token colours (GitHub-light palette).
