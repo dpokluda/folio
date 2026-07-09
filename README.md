@@ -7,9 +7,7 @@ Folio renders your Markdown into a paged, themed "sheet" (just like Typora), let
 into a themed source-code editor, and switches the whole look — preview *and* editor — by
 swapping a single CSS theme file.
 
-![Folio screenshot placeholder](docs/screenshot.png)
-
-> _Screenshot placeholder — add `docs/screenshot.png` (preview + source mode) here._
+![Folio rendering the Markdown formatting tour with the Fluent theme](docs/folio.png)
 
 ---
 
@@ -133,7 +131,7 @@ Windows build.)
   ```sh
   # from a dev checkout
   npm start -- path/to/notes.md
-
+  
   # or a packaged build
   Folio path/to/notes.md
   ```
