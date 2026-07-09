@@ -1,0 +1,83 @@
+/* ==========================================================================
+   Fluent US Letter  —  fixed "printed page" width (US Letter)
+   --------------------------------------------------------------------------
+   Builds on the base Fluent theme and constrains the writing column to a
+   US-Letter-sized sheet (8.5in ≈ 816px @96dpi), rendered as a white page
+   floating on a soft grey backdrop — similar to a Word print view.
+
+   Requires `fluent.css` to live in the SAME folder (Typora themes folder).
+   The @import below pulls in the full Fluent theme, then only the width /
+   page-look rules are overridden here.
+   ========================================================================== */
+
+@import url('fluent.css');
+
+/* --- backdrop behind the page ------------------------------------------- */
+/* Typora paints the editor viewport with --bg-color; tint it grey so the
+   white sheet stands out. (Dark mode keeps Fluent's own dark background.)  */
+:root {
+    --bg-color: #eceef1;
+}
+
+/* Keep table zebra-striping white — it also reads --bg-color in base Fluent */
+table tbody tr:nth-child(2n+1) {
+    background-color: #ffffff;
+}
+
+/* Source-code (raw markdown) mode: a plain white full-width editor. In source
+   mode Typora adds `.typora-sourceview-on` to an ancestor of the editor whose
+   background is our grey --bg-color (that's the grey bar at the very top).
+   Redefining --bg-color to white *scoped to source mode* whitens that bar and
+   everything else that reads it, while the live-preview sheet keeps its grey
+   backdrop. We also flatten the gutter border and the active-line highlight. */
+.typora-sourceview-on {
+    --bg-color: #ffffff;
+    background-color: #ffffff;
+}
+#typora-source,
+#typora-source .CodeMirror,
+#typora-source .CodeMirror-gutters {
+    background-color: #ffffff;
+}
+#typora-source .CodeMirror-gutters {
+    border-right: none;
+}
+#typora-source .CodeMirror-activeline-background,
+#typora-source .CodeMirror-activeline .CodeMirror-linebackground {
+    background: transparent !important;
+}
+
+/* --- smaller type ------------------------------------------------------- */
+/* Base Fluent sizes headings in em/rem off the root font-size, so lowering
+   it scales the whole document down to a compact ~11pt body (matching the
+   Microsoft Word themes). Keeps Fluent's Inter font family.                 */
+html {
+    font-size: 11pt;
+}
+
+/* --- the page / sheet ---------------------------------------------------- */
+#write {
+    max-width: 816px;                 /* US Letter width @96dpi (8.5in)      */
+    margin: 28px auto 72px;           /* float the sheet with breathing room */
+    padding: 76px 82px 110px;         /* ~0.8in side margins, like a page    */
+    background: #ffffff;
+    border-radius: 2px;
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.12),
+        0 10px 28px rgba(0, 0, 0, 0.10);
+}
+
+/* Lock the width regardless of window size (base Fluent widens on big
+   windows via these breakpoints — pin them back to the page width).        */
+@media only screen and (min-width: 1400px) {
+    #write { max-width: 816px; }
+}
+@media only screen and (min-width: 1800px) {
+    #write { max-width: 816px; }
+}
+
+/* Source-code (raw markdown) mode: plain full-width editor — no page look.
+   (Base Fluent caps it at 1024px; unconstrain it here.)                     */
+#typora-source .CodeMirror-lines {
+    max-width: none;
+}

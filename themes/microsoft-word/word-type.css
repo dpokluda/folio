@@ -1,0 +1,174 @@
+/* ==========================================================================
+   microsoft-word/word-type.css  —  Microsoft Word (Aptos) typography layer
+   --------------------------------------------------------------------------
+   Shared building block. NOT a selectable theme on its own — it lives in the
+   microsoft-word subfolder and is @import-ed by the microsoft-word-* theme files.
+
+   Defines fonts, heading styles, colours, body spacing and the white "sheet"
+   look. Text is monochrome (black / grey / white); code syntax highlighting
+   and emoji deliberately keep their colour. Page width / margins are set
+   separately by the word-page-*.css files.
+
+   The Aptos font files live beside this file in ./fonts.
+   ========================================================================== */
+
+/* ---- bundled Aptos fonts (snapshotted from Office cloud fonts) ---------- */
+@font-face {
+    font-family: "Aptos";
+    font-style: normal; font-weight: 400;
+    src: url("fonts/Aptos-Regular.ttf") format("truetype");
+}
+@font-face {
+    font-family: "Aptos";
+    font-style: normal; font-weight: 700;
+    src: url("fonts/Aptos-Bold.ttf") format("truetype");
+}
+@font-face {
+    font-family: "Aptos";
+    font-style: italic; font-weight: 400;
+    src: url("fonts/Aptos-Italic.ttf") format("truetype");
+}
+@font-face {
+    font-family: "Aptos";
+    font-style: italic; font-weight: 700;
+    src: url("fonts/Aptos-BoldItalic.ttf") format("truetype");
+}
+@font-face {
+    font-family: "Aptos Display";
+    font-style: normal; font-weight: 400;
+    src: url("fonts/AptosDisplay-Regular.ttf") format("truetype");
+}
+@font-face {
+    font-family: "Aptos Display";
+    font-style: normal; font-weight: 700;
+    src: url("fonts/AptosDisplay-Bold.ttf") format("truetype");
+}
+
+/* ---- fonts + palette ---------------------------------------------------- */
+:root {
+    --title-font: "Aptos Display", "Aptos", "Segoe UI", "Inter Display", "Inter";
+    --text-font:  "Aptos", "Segoe UI", "Inter";
+    --bg-color: #eceef1;          /* soft grey backdrop behind the page      */
+    --text-link: #1a1a1a;         /* monochrome hyperlink (kept underlined)  */
+}
+
+/* Keep table zebra-striping white — base Fluent reads --bg-color for it */
+table tbody tr:nth-child(2n+1) {
+    background-color: #ffffff;
+}
+
+/* Source-code (raw markdown) mode: a plain white full-width editor. In source
+   mode Typora adds `.typora-sourceview-on` to an ancestor of the editor whose
+   background is our grey --bg-color (that's the grey bar at the very top).
+   Redefining --bg-color to white *scoped to source mode* whitens that bar and
+   everything else that reads it, while the live-preview sheet keeps its grey
+   backdrop. We also flatten the gutter border and the active-line highlight. */
+.typora-sourceview-on {
+    --bg-color: #ffffff;
+    background-color: #ffffff;
+}
+#typora-source,
+#typora-source .CodeMirror,
+#typora-source .CodeMirror-gutters {
+    background-color: #ffffff;
+}
+#typora-source .CodeMirror-gutters {
+    border-right: none;
+}
+#typora-source .CodeMirror-activeline-background,
+#typora-source .CodeMirror-activeline .CodeMirror-linebackground {
+    background: transparent !important;
+}
+
+/* ---- the sheet + Word body text (width/margins come from word-page-*) --- */
+#write {
+    box-sizing: border-box;
+    background: #ffffff;
+    border-radius: 2px;
+    box-shadow:
+        0 1px 3px rgba(0, 0, 0, 0.12),
+        0 10px 28px rgba(0, 0, 0, 0.10);
+
+    font-family: var(--general-font);
+    font-size: 11pt;
+    line-height: 1.26;
+    color: #000000;
+}
+
+/* ---- body paragraphs: 8pt space-after, no space-before ------------------ */
+#write p,
+#write dl,
+#write ul,
+#write ol {
+    margin: 0 0 8pt;
+    font-size: 11pt;
+    line-height: 1.26;
+}
+#write li { margin: 0; }
+#write li > ul,
+#write li > ol { margin: 0; }
+
+/* ---- headings: Word Aptos style ----------------------------------------- */
+/* Base Fluent forces bold + --display-font!important + tight letter-spacing;
+   reset all of that to Word's values.                                       */
+#write h1,
+#write h2,
+#write h3,
+#write h4,
+#write h5,
+#write h6 {
+    font-weight: 400;
+    letter-spacing: normal;
+    line-height: 1.15;
+    color: #171717;                   /* near-black (monochrome headings)    */
+}
+
+#write h1 {
+    font-family: "Aptos Display", var(--title-font) !important;
+    font-size: 20pt;
+    margin: 18pt 0 4pt;
+}
+#write h2 {
+    font-family: "Aptos Display", var(--title-font) !important;
+    font-size: 16pt;
+    margin: 8pt 0 4pt;
+}
+#write h3 {
+    font-family: "Aptos", var(--text-font) !important;
+    font-size: 14pt;
+    margin: 8pt 0 4pt;
+}
+#write h4 {
+    font-family: "Aptos", var(--text-font) !important;
+    font-size: 11pt;
+    font-style: italic;
+    margin: 4pt 0 2pt;
+}
+#write h5 {
+    font-family: "Aptos", var(--text-font) !important;
+    font-size: 11pt;
+    margin: 4pt 0 2pt;
+}
+#write h6 {
+    font-family: "Aptos", var(--text-font) !important;
+    font-size: 11pt;
+    font-style: italic;
+    color: #595959;                   /* Text1, lighter (Word H6 / Subtitle) */
+    margin: 2pt 0 0;
+}
+
+/* ---- blockquote: Word "Quote" style ------------------------------------- */
+#write blockquote {
+    font-style: italic;
+    color: #404040;
+}
+
+/* ---- links: monochrome, but keep an underline so they stay identifiable -- */
+#write a {
+    color: #1a1a1a;
+    text-decoration: underline;
+}
+
+/* NOTE: text is intentionally black/grey/white only. Code fences / inline
+   code keep Fluent's syntax colours (the --color-cm-* variables are not
+   touched here), and emoji glyphs render in their own colour regardless. */

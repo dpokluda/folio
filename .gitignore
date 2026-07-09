@@ -1,0 +1,18 @@
+# Dependencies
+node_modules/
+
+# Build output
+src/renderer/bundle.js
+src/renderer/bundle.js.map
+release/
+dist/
+
+# Aptos fonts are Microsoft Office cloud fonts — do NOT redistribute in a public repo.
+# Users must supply their own (from an Office install) or the Word themes fall back
+# to Segoe UI / Inter. See README "Themes" section.
+themes/microsoft-word/fonts/*.ttf
+
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.log

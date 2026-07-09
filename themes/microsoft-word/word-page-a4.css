@@ -1,0 +1,18 @@
+/* ==========================================================================
+   microsoft-word/word-page-a4.css  —  A4 page geometry (Word margins)
+   --------------------------------------------------------------------------
+   Shared building block (not a selectable theme). A4 = 210mm (595pt) wide;
+   Word margins: 1in top/bottom, 0.75in sides.
+   ========================================================================== */
+
+#write {
+    max-width: 595pt;
+    margin: 28px auto 72px;
+    padding: 72pt 54pt 96pt;
+}
+
+@media only screen and (min-width: 1400px) { #write { max-width: 595pt; } }
+@media only screen and (min-width: 1800px) { #write { max-width: 595pt; } }
+
+/* Source-code mode: plain full-width editor — no page look. */
+#typora-source .CodeMirror-lines { max-width: none; }
