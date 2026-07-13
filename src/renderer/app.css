@@ -54,6 +54,18 @@ body {
   overflow-x: hidden;
 }
 
+/* --- Text weight compensation -------------------------------------------
+   Folio runs a modern Chromium (Electron 31) that renders the theme's body
+   font (Inter) noticeably lighter than Typora's older Chromium: same font,
+   same size, but measurably less ink coverage and lighter glyph edges
+   (~0.20 vs Typora's ~0.23 ink density in side-by-side captures). A hairline
+   same-colour text stroke on the rendered content restores the heavier,
+   easier-to-read weight Typora shows, without changing the font, size, or
+   layout. Tune to taste: 0 disables it, ~0.3px is heavier still. */
+#write {
+  -webkit-text-stroke: 0.15px currentColor;
+}
+
 .folio-scroll {
   scrollbar-width: thin;
 }
