@@ -184,6 +184,33 @@ symlink creation disabled into electron-builder's cache — so no Administrator
 rights or Developer Mode are needed. (The macOS symlinks are irrelevant to a
 Windows build.)
 
+#### Windows "Unable to commit changes" (rcedit) note
+
+On Windows, electron-builder stamps version info and the icon into the freshly
+built `Folio.exe` with `rcedit`. That step can fail with:
+
+```
+⨯ cannot execute  cause=exit status 1
+  errorOut=Fatal error: Unable to commit changes  (rcedit-x64.exe …)
+```
+
+This is a **file lock**, not a Folio bug — usually antivirus (Windows Defender)
+scanning the ~180 MB executable the instant it's written, or a previously
+packaged **Folio still running** and holding `release\win-unpacked\Folio.exe`
+open. Folio mitigates it automatically:
+
+- `npm run dist` first runs `scripts/clean-release.js`, which deletes the stale
+  `*-unpacked` output. If it can't (because a packaged Folio is open) it stops
+  with a clear message instead of the cryptic rcedit error — just close Folio
+  and re-run.
+- Packaging then runs through `scripts/run-electron-builder.js`, which retries
+  automatically when it detects the transient rcedit lock (and fails fast on any
+  other error).
+
+If it still fails after the retries, close any running Folio and/or add the
+project's `release\` folder to your antivirus exclusions, then run the command
+again.
+
 ---
 
 ## How to use

@@ -21,10 +21,11 @@
     "start": "npm run ensure:electron && npm run build:renderer && electron .",
     "icons": "node scripts/generate-icons.js",
     "prepare:wincodesign": "node scripts/prepare-wincodesign.js",
-    "dist": "npm run ensure:electron && npm run build:renderer && npm run prepare:wincodesign && electron-builder",
-    "dist:win": "npm run ensure:electron && npm run build:renderer && npm run prepare:wincodesign && electron-builder --win",
-    "dist:mac": "npm run ensure:electron && npm run build:renderer && electron-builder --mac",
-    "dist:linux": "npm run ensure:electron && npm run build:renderer && electron-builder --linux"
+    "clean:release": "node scripts/clean-release.js",
+    "dist": "npm run ensure:electron && npm run build:renderer && npm run prepare:wincodesign && npm run clean:release && node scripts/run-electron-builder.js",
+    "dist:win": "npm run ensure:electron && npm run build:renderer && npm run prepare:wincodesign && npm run clean:release && node scripts/run-electron-builder.js --win",
+    "dist:mac": "npm run ensure:electron && npm run build:renderer && npm run clean:release && node scripts/run-electron-builder.js --mac",
+    "dist:linux": "npm run ensure:electron && npm run build:renderer && npm run clean:release && node scripts/run-electron-builder.js --linux"
   },
   "dependencies": {
     "@codemirror/commands": "^6.6.0",
