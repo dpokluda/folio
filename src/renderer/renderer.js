@@ -63,6 +63,7 @@ const state = {
   filesVisible: false,
   pendingAnchor: null, // heading to scroll to after the next preview render
   find: { open: false, query: '', matches: [], index: -1 }, // in-preview find
+  pendingFindQuery: '', // term to auto-highlight after a Find-in-Files navigation
 };
 
 let editor = null;
@@ -77,6 +78,8 @@ const $outlineList = document.getElementById('folio-outline-list');
 const $files = document.getElementById('folio-files');
 const $filesTree = document.getElementById('folio-files-tree');
 const $filesTitle = document.getElementById('folio-files-title');
+const $filesSearch = document.getElementById('folio-files-search');
+const $filesResults = document.getElementById('folio-files-results');
 const $stats = document.getElementById('folio-stats');
 const $btnOutline = document.getElementById('btn-outline');
 const $btnFiles = document.getElementById('btn-files');
@@ -318,6 +321,7 @@ function setFolder(payload, show) {
     expandAncestorsOf(state.path);
   }
   $filesTitle.textContent = state.folder ? state.folder.name : 'Files';
+  clearFileSearch();
   renderFileTree();
   if (show != null) setFilesVisible(show);
 }
@@ -403,6 +407,128 @@ function syncFileTree() {
   if (!state.tree.length) return;
   expandAncestorsOf(state.path);
   renderFileTree();
+}
+
+// ---------------------------------------------------------------------------
+// Find in Files (folder-scoped content search)
+// ---------------------------------------------------------------------------
+let fileSearchTimer = null;
+
+function openFileSearch() {
+  setFilesVisible(true);
+  $filesSearch.focus();
+  $filesSearch.select();
+}
+
+function scheduleFileSearch() {
+  clearTimeout(fileSearchTimer);
+  fileSearchTimer = setTimeout(runFileSearch, 180);
+}
+
+function runFileSearch() {
+  const query = $filesSearch.value.trim();
+  if (!query) {
+    showFileTree();
+    return;
+  }
+  Promise.resolve(window.folioAPI.searchFiles(query))
+    .then((data) => renderFileResults(data))
+    .catch((err) => console.error(err));
+}
+
+function showFileTree() {
+  $filesResults.hidden = true;
+  $filesResults.innerHTML = '';
+  $filesTree.hidden = false;
+}
+
+function clearFileSearch() {
+  clearTimeout(fileSearchTimer);
+  if ($filesSearch) $filesSearch.value = '';
+  showFileTree();
+}
+
+function renderFileResults(data) {
+  $filesTree.hidden = true;
+  $filesResults.hidden = false;
+  $filesResults.innerHTML = '';
+  const query = (data && data.query) || '';
+  const files = (data && data.files) || [];
+  if (!files.length) {
+    const empty = document.createElement('div');
+    empty.className = 'folio-files-empty';
+    empty.textContent = 'No matches';
+    $filesResults.appendChild(empty);
+    return;
+  }
+  const total = files.reduce((n, f) => n + f.matches.length, 0);
+  const summary = document.createElement('div');
+  summary.className = 'files-results-summary';
+  summary.textContent =
+    `${total} match${total === 1 ? '' : 'es'} in ${files.length} file${files.length === 1 ? '' : 's'}` +
+    (data && data.truncated ? ' (truncated)' : '');
+  $filesResults.appendChild(summary);
+  const frag = document.createDocumentFragment();
+  files.forEach((file) => {
+    const group = document.createElement('div');
+    group.className = 'files-result-group';
+    const header = document.createElement('div');
+    header.className = 'files-result-file';
+    if (samePath(file.path, state.path)) header.classList.add('active');
+    header.title = file.path;
+    const nm = document.createElement('span');
+    nm.className = 'files-name';
+    nm.textContent = file.name;
+    const cnt = document.createElement('span');
+    cnt.className = 'files-result-count';
+    cnt.textContent = String(file.matches.length);
+    header.append(nm, cnt);
+    header.addEventListener('click', () => openSearchResult(file.path, query));
+    group.appendChild(header);
+    file.matches.forEach((m) => {
+      const row = document.createElement('div');
+      row.className = 'files-result-match';
+      row.title = `Line ${m.line}`;
+      const ln = document.createElement('span');
+      ln.className = 'files-result-line';
+      ln.textContent = String(m.line);
+      const tx = document.createElement('span');
+      tx.className = 'files-result-text';
+      appendHighlighted(tx, m.text, query);
+      row.append(ln, tx);
+      row.addEventListener('click', () => openSearchResult(file.path, query));
+      group.appendChild(row);
+    });
+    frag.appendChild(group);
+  });
+  $filesResults.appendChild(frag);
+}
+
+// Append `text` to `el`, wrapping case-insensitive occurrences of `query` in <mark>.
+function appendHighlighted(el, text, query) {
+  const q = (query || '').toLowerCase();
+  if (!q) {
+    el.appendChild(document.createTextNode(text));
+    return;
+  }
+  const lower = text.toLowerCase();
+  let i = 0;
+  let idx;
+  while ((idx = lower.indexOf(q, i)) !== -1) {
+    if (idx > i) el.appendChild(document.createTextNode(text.slice(i, idx)));
+    const mark = document.createElement('mark');
+    mark.textContent = text.slice(idx, idx + q.length);
+    el.appendChild(mark);
+    i = idx + q.length;
+  }
+  if (i < text.length) el.appendChild(document.createTextNode(text.slice(i)));
+}
+
+// Open a document from a search result and remember the term so the in-preview
+// find bar highlights it once the document renders.
+function openSearchResult(path, query) {
+  state.pendingFindQuery = query;
+  navigateTo({ path });
 }
 
 function setFilesVisible(on) {
@@ -669,6 +795,13 @@ function loadDocument(doc) {
   syncFileTree();
   updateStatusButtons();
   $preview.scrollTop = 0;
+
+  // If we arrived here from a Find-in-Files result, highlight the term.
+  if (state.pendingFindQuery) {
+    const q = state.pendingFindQuery;
+    state.pendingFindQuery = '';
+    if (!state.sourceMode) openFindBar(q);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -712,6 +845,9 @@ function handleCommand(name) {
       } else {
         openFindBar();
       }
+      break;
+    case 'find-in-files':
+      openFileSearch();
       break;
     default:
       break;
@@ -782,6 +918,19 @@ async function boot() {
     $findInput.focus();
   });
   $findClose.addEventListener('click', () => closeFindBar());
+
+  // Wire the Find-in-Files search box.
+  $filesSearch.addEventListener('input', () => scheduleFileSearch());
+  $filesSearch.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      clearFileSearch();
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      clearTimeout(fileSearchTimer);
+      runFileSearch();
+    }
+  });
 
   // Wire main -> renderer events.
   window.folioAPI.onCommand((payload) => handleCommand(payload && payload.name));

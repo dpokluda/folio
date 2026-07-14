@@ -17,7 +17,11 @@
     <div id="folio-root">
       <aside id="folio-files" hidden aria-label="File explorer">
         <div class="folio-files-title" id="folio-files-title">Files</div>
+        <input id="folio-files-search" class="folio-files-search" type="text"
+          placeholder="Find in files…" aria-label="Find in files"
+          spellcheck="false" autocomplete="off" />
         <nav id="folio-files-tree"></nav>
+        <div id="folio-files-results" hidden></div>
       </aside>
 
       <aside id="folio-outline" hidden aria-label="Document outline">

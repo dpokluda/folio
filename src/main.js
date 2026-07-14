@@ -37,7 +37,13 @@ function builtinDocPath(file) {
 // ---------------------------------------------------------------------------
 // Folder mode: file-explorer tree + internal link navigation
 // ---------------------------------------------------------------------------
-const { isMarkdownFile, scanFolder, entryDocFor, resolveNavTarget } = require('./folder');
+const {
+  isMarkdownFile,
+  scanFolder,
+  entryDocFor,
+  resolveNavTarget,
+  searchInFolder,
+} = require('./folder');
 
 // Built-in documents shown from the Help menu. Opened as *untitled* so they are
 // viewable and editable, but Save becomes Save As and never overwrites the
@@ -215,6 +221,18 @@ const actions = {
   zoomOut: () => send('command', { name: 'zoom-out' }),
   zoomReset: () => send('command', { name: 'zoom-reset' }),
   find: () => send('command', { name: 'find' }),
+  findInFiles: () => {
+    if (!currentFolder) {
+      dialog.showMessageBox(mainWindow, {
+        type: 'info',
+        title: 'Find in Files',
+        message: 'Find in Files searches an open folder.',
+        detail: 'Open a folder first (File ▸ Open Folder) to search across its Markdown files.',
+      });
+      return;
+    }
+    send('command', { name: 'find-in-files' });
+  },
   setStyleFamily: (family) => {
     store.set('styleFamily', family);
     pushTheme();
@@ -597,6 +615,16 @@ ipcMain.on('state-changed', (_e, state) => {
 
 ipcMain.on('open-external', (_e, url) => {
   if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+});
+
+// Content search across every markdown file in the open folder (Find in Files).
+ipcMain.handle('search-files', (_e, query) => {
+  if (!currentFolder) return { query, files: [], truncated: false };
+  try {
+    return searchInFolder(currentFolder, query);
+  } catch (_) {
+    return { query, files: [], truncated: false };
+  }
 });
 
 // Navigation from the file explorer (a file click) or from an in-document link

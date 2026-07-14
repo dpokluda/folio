@@ -252,7 +252,12 @@ again.
 - **Export to PDF** — `File ▸ Export to PDF…`. The page size follows the active **Page width**
   (A4 vs US Letter).
 - **Zoom** — `Ctrl/Cmd +` / `Ctrl/Cmd -` / `Ctrl/Cmd 0`.
-- **Find** — `Ctrl/Cmd+F` (in source mode).
+- **Find** — `Ctrl/Cmd+F` searches the current document: a find bar appears over the rendered
+  preview (highlighting every match, with next/previous), and in source mode it opens
+  CodeMirror's search panel.
+- **Find in Files** — `Ctrl/Cmd+Shift+F` (needs an open folder) searches every Markdown file in
+  the folder. Results appear in the file-explorer pane grouped by file; click a match to open
+  that document with the term highlighted. Clear the search box to return to the file tree.
 
 ---
 

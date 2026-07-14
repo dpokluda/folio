@@ -134,6 +134,50 @@ function resolveNavTarget(payload = {}) {
   return { kind: 'external', path: targetPath };
 }
 
+// Flatten an explorer tree (from scanFolder) into a list of markdown file paths.
+function collectMarkdownFiles(tree, out = []) {
+  for (const n of tree) {
+    if (n.type === 'file') out.push(n.path);
+    else if (n.type === 'dir') collectMarkdownFiles(n.children, out);
+  }
+  return out;
+}
+
+const SEARCH_MAX_MATCHES_PER_FILE = 50;
+const SEARCH_MAX_TOTAL_MATCHES = 1000;
+const SEARCH_MAX_FILES = 500;
+
+// Case-insensitive substring search across every markdown file under `dir`.
+// Returns { query, files: [{ path, name, matches: [{ line, text }] }], truncated }.
+// Pure (fs only) so it can be unit tested without Electron.
+function searchInFolder(dir, query) {
+  const q = String(query == null ? '' : query).toLowerCase();
+  if (!q.trim()) return { query, files: [], truncated: false };
+  const files = collectMarkdownFiles(scanFolder(dir));
+  const results = [];
+  let total = 0;
+  for (const file of files) {
+    let content;
+    try {
+      content = fs.readFileSync(file, 'utf8');
+    } catch (_) {
+      continue;
+    }
+    const lines = content.split(/\r?\n/);
+    const matches = [];
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].toLowerCase().includes(q)) {
+        matches.push({ line: i + 1, text: lines[i].trim().slice(0, 240) });
+        total++;
+        if (matches.length >= SEARCH_MAX_MATCHES_PER_FILE || total >= SEARCH_MAX_TOTAL_MATCHES) break;
+      }
+    }
+    if (matches.length) results.push({ path: file, name: path.relative(dir, file), matches });
+    if (total >= SEARCH_MAX_TOTAL_MATCHES || results.length >= SEARCH_MAX_FILES) break;
+  }
+  return { query, files: results, truncated: total >= SEARCH_MAX_TOTAL_MATCHES };
+}
+
 module.exports = {
   MD_EXTS,
   isMarkdownFile,
@@ -141,4 +185,6 @@ module.exports = {
   entryDocFor,
   folderIndexDoc,
   resolveNavTarget,
+  collectMarkdownFiles,
+  searchInFolder,
 };

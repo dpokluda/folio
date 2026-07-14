@@ -17,6 +17,7 @@ contextBridge.exposeInMainWorld('folioAPI', {
   // renderer -> main
   getInit: () => ipcRenderer.invoke('get-init'),
   navigate: (payload) => ipcRenderer.invoke('navigate', payload),
+  searchFiles: (query) => ipcRenderer.invoke('search-files', query),
   setDirty: (value) => ipcRenderer.send('dirty-changed', value),
   setState: (state) => ipcRenderer.send('state-changed', state),
   openExternal: (url) => ipcRenderer.send('open-external', url),

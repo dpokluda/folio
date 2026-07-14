@@ -84,6 +84,7 @@ function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, act
       { role: 'selectAll' },
       { type: 'separator' },
       { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: () => actions.find() },
+      { label: 'Find in Files…', accelerator: 'CmdOrCtrl+Shift+F', click: () => actions.findInFiles() },
     ],
   });
 

@@ -346,6 +346,104 @@ body {
   background: #cfe0fb;
 }
 
+/* Find-in-Files: search box + results list */
+.folio-files-search {
+  display: block;
+  box-sizing: border-box;
+  width: calc(100% - 24px);
+  margin: 0 12px 8px;
+  padding: 5px 9px;
+  font: inherit;
+  font-size: 12px;
+  color: #333;
+  background: #fff;
+  border: 1px solid #d4d7dc;
+  border-radius: 5px;
+  outline: none;
+}
+.folio-files-search:focus {
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.18);
+}
+.folio-files-search::placeholder {
+  color: #a2a7b0;
+}
+#folio-files-results {
+  padding-bottom: 20px;
+}
+#folio-files-results[hidden] {
+  display: none;
+}
+.files-results-summary {
+  padding: 2px 16px 8px;
+  font-size: 11px;
+  color: #8a8f98;
+}
+.files-result-group {
+  margin-bottom: 6px;
+}
+.files-result-file {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 12px 3px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.files-result-file:hover {
+  background: #e9ebef;
+}
+.files-result-file .files-name {
+  font-weight: 600;
+  color: #3a3f45;
+}
+.files-result-file.active .files-name {
+  color: #0a3b82;
+}
+.files-result-count {
+  flex: 0 0 auto;
+  min-width: 18px;
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  color: #6b7078;
+  background: #e2e4e8;
+  border-radius: 8px;
+}
+.files-result-match {
+  display: flex;
+  gap: 8px;
+  padding: 2px 12px 2px 22px;
+  cursor: pointer;
+  font-size: 12px;
+  color: #55595f;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.files-result-match:hover {
+  background: #eef1f5;
+}
+.files-result-line {
+  flex: 0 0 auto;
+  min-width: 26px;
+  text-align: right;
+  color: #a2a7b0;
+  font-variant-numeric: tabular-nums;
+}
+.files-result-text {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.files-result-text mark {
+  background: #ffe58a;
+  color: inherit;
+  padding: 0 1px;
+  border-radius: 2px;
+}
+
 /* ==========================================================================
    Status bar (Typora-style): mode toggles on the left, live stats on the right.
    Scoped to #folio-statusbar so no theme rules touch it; uses neutral chrome
@@ -497,6 +595,25 @@ body {
   .files-file.active { background: #24304d; }
   .files-file.active .files-name { color: #9db4ff; }
   .files-file.active:hover { background: #2b385a; }
+  .folio-files-search {
+    color: #d4d7dc;
+    background: #1c1e22;
+    border-color: #34373d;
+  }
+  .folio-files-search:focus {
+    border-color: #4a90e2;
+    box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.25);
+  }
+  .folio-files-search::placeholder { color: #6b7078; }
+  .files-results-summary { color: #7b818b; }
+  .files-result-file:hover { background: #24262b; }
+  .files-result-file .files-name { color: #c3c8d0; }
+  .files-result-file.active .files-name { color: #9db4ff; }
+  .files-result-count { color: #aab0b8; background: #30333a; }
+  .files-result-match { color: #9298a1; }
+  .files-result-match:hover { background: #24262b; }
+  .files-result-line { color: #6b7078; }
+  .files-result-text mark { background: #6b5a1e; color: #ffe58a; }
 
   /* --- status bar --- */
   #folio-statusbar {
