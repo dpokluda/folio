@@ -434,6 +434,19 @@ code {
     padding: 0 2px 0 2px;
 }
 
+/* Code inside a fenced block: the <pre class="md-fences"> already draws the box.
+   The inner <code> is display:inline, so the border/background above would be
+   painted on every wrapped line box, showing as stray horizontal lines between
+   code lines. Reset it so only the outer fence frames the block. */
+.md-fences code,
+.md-fences tt,
+.md-fences .hljs {
+    border: 0;
+    background-color: transparent;
+    padding: 0;
+    border-radius: 0;
+}
+
 .md-fences {
     margin-bottom: 15px;
     margin-top: 15px;

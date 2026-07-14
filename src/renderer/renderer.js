@@ -6,6 +6,7 @@ import taskLists from 'markdown-it-task-lists';
 import footnote from 'markdown-it-footnote';
 import { full as emojiPlugin } from 'markdown-it-emoji';
 import hljs from 'highlight.js';
+import DOMPurify from 'dompurify';
 
 import { EditorState, Compartment } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection } from '@codemirror/view';
@@ -161,7 +162,10 @@ function renderPreview() {
   const { frontMatter, body } = splitFrontMatter(currentText() || '');
   let html = md.render(body);
   if (frontMatter != null) html = renderFrontMatter(frontMatter) + html;
-  $write.innerHTML = html;
+  // markdown-it runs with html:true so documents may contain raw HTML. Opened
+  // files are untrusted, so sanitize before injection to strip scripts and
+  // inline event handlers (e.g. <img onerror=…>) that would otherwise run.
+  $write.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['target'] });
   resolveLocalAssets();
   wireLinks();
   buildOutline();
@@ -778,6 +782,14 @@ function markSaved() {
 // Document loading
 // ---------------------------------------------------------------------------
 function loadDocument(doc) {
+  // On an in-place reload (external change or File ▸ Reload), keep the reading
+  // position instead of snapping to the top. Capture it as a fraction so it still
+  // makes sense if the document grew or shrank.
+  const preserveScroll = !!doc.preserveScroll;
+  const prevPreviewFrac =
+    preserveScroll && $preview.scrollHeight > 0 ? $preview.scrollTop / $preview.scrollHeight : 0;
+  const prevEditorTop = preserveScroll && editor ? editor.scrollDOM.scrollTop : 0;
+
   state.path = doc.path || null;
   state.baseUrl = doc.baseUrl || null;
   state.docText = doc.content || '';
@@ -801,7 +813,20 @@ function loadDocument(doc) {
   state.pendingAnchor = null;
   syncFileTree();
   updateStatusButtons();
-  $preview.scrollTop = 0;
+
+  if (preserveScroll) {
+    if (state.sourceMode) {
+      requestAnimationFrame(() => {
+        if (editor) editor.scrollDOM.scrollTop = prevEditorTop;
+      });
+    } else {
+      requestAnimationFrame(() => {
+        $preview.scrollTop = prevPreviewFrac * $preview.scrollHeight;
+      });
+    }
+  } else {
+    $preview.scrollTop = 0;
+  }
 
   // If we arrived here from a Find-in-Files result, highlight the term.
   if (state.pendingFindQuery) {
@@ -862,15 +887,19 @@ function handleCommand(name) {
 }
 
 // ---------------------------------------------------------------------------
-// Bridge for the main process (executeJavaScript targets the main world)
+// Requests from the main process (content for save, prepare for export)
 // ---------------------------------------------------------------------------
-window.folio = {
-  getContent: () => currentText(),
-  prepareForExport: () => {
-    if (state.sourceMode) setSourceMode(false);
-    return true;
-  },
-};
+function handleMainRequest(kind) {
+  switch (kind) {
+    case 'content':
+      return currentText();
+    case 'prepare-export':
+      if (state.sourceMode) setSourceMode(false);
+      return true;
+    default:
+      return null;
+  }
+}
 
 // ---------------------------------------------------------------------------
 // Boot
@@ -952,6 +981,9 @@ async function boot() {
     if (!state.sourceMode) renderPreview();
     syncFileTree();
   });
+
+  // Answer main-process requests (get editor content, prepare for export).
+  window.folioAPI.onRequest((kind) => handleMainRequest(kind));
 }
 
 boot().catch((err) => {

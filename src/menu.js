@@ -3,7 +3,7 @@ const path = require('path');
 
 // "fluent" -> "Fluent", "word" -> "Microsoft Word" — the Style family radio
 // group uses explicit labels below.
-function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, hasFolder, actions }) {
+function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, hasFolder, hasFile, actions }) {
   const recentSubmenu =
     recentFiles && recentFiles.length
       ? [
@@ -59,10 +59,13 @@ function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, has
     label: 'File',
     submenu: [
       { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => actions.newFile() },
+      { label: 'New Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => actions.newWindow() },
       { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => actions.open() },
       { label: 'Open Folder…', accelerator: 'CmdOrCtrl+Shift+O', click: () => actions.openFolder() },
       { label: 'Close Folder', accelerator: 'CmdOrCtrl+Shift+W', enabled: !!hasFolder, click: () => actions.closeFolder() },
       { label: 'Open Recent', submenu: recentSubmenu },
+      { type: 'separator' },
+      { label: 'Reload from Disk', accelerator: 'CmdOrCtrl+R', enabled: !!hasFile, click: () => actions.reload() },
       { type: 'separator' },
       { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => actions.save() },
       { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => actions.saveAs() },
@@ -127,7 +130,6 @@ function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, has
       { label: 'Markdown Formatting Tour', click: () => actions.openFormattingTour() },
       { type: 'separator' },
       { label: 'About Folio', click: () => actions.about() },
-      { label: 'Folio on GitHub', click: () => actions.openRepo() },
     ],
   });
 

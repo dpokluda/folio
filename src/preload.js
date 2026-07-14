@@ -14,6 +14,21 @@ contextBridge.exposeInMainWorld('folioAPI', {
   onSaved: (cb) => listen('saved', cb),
   onDocumentPathChanged: (cb) => listen('document-path-changed', cb),
 
+  // main -> renderer request/response. The renderer registers a single handler;
+  // for each incoming { id, kind } it returns a value (sync or Promise) that is
+  // sent back to main on the paired response channel, keyed by the same id.
+  onRequest: (handler) => {
+    ipcRenderer.on('folio-request', async (_event, { id, kind }) => {
+      let value = null;
+      try {
+        value = await handler(kind);
+      } catch (_) {
+        value = null;
+      }
+      ipcRenderer.send('folio-response', { id, value });
+    });
+  },
+
   // renderer -> main
   getInit: () => ipcRenderer.invoke('get-init'),
   navigate: (payload) => ipcRenderer.invoke('navigate', payload),

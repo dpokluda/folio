@@ -7,16 +7,51 @@ const { buildMenu } = require('./menu');
 
 const store = new Store();
 
-let mainWindow = null;
-let currentPath = null; // absolute path of the open file, or null for an untitled doc
-let currentName = 'Welcome'; // display name when untitled
-let isDirty = false;
-let forceClose = false;
-let pendingOpenPath = null; // file to open once the renderer is ready (startup / macOS open-file)
-let currentFolder = null; // root of the open folder (file-explorer mode), or null
-let pendingOpenFolder = null; // folder to open in explorer mode once the renderer is ready (startup)
+// ---------------------------------------------------------------------------
+// Per-window session state
+//
+// Folio supports multiple windows, each viewing its own document/folder. All
+// per-document state lives on a Session bound to one BrowserWindow; IPC handlers
+// resolve the sender's Session via sessionFor(), and menu actions act on the
+// focused window's Session. App-wide preferences (theme, appearance, page width,
+// recent files, window size) stay in the shared `store`.
+// ---------------------------------------------------------------------------
+class Session {
+  constructor(win) {
+    this.win = win;
+    this.id = win.webContents.id; // stable window id, captured while webContents is alive
+    this.currentPath = null; // absolute path of the open file, or null for an untitled doc
+    this.currentName = 'Welcome'; // display name when untitled
+    this.isDirty = false;
+    this.forceClose = false;
+    this.currentFolder = null; // root of the open folder (file-explorer mode), or null
+    this.pendingOpenPath = null; // file to open once the renderer is ready
+    this.pendingOpenFolder = null; // folder to open in explorer mode once the renderer is ready
+    this.watchedPath = null; // file currently watched for external changes, or null
+    this.lastMtimeMs = 0; // last-seen mtime of the watched file, to ignore our own writes
+  }
+}
 
-const REPO_URL = 'https://github.com/dpokluda/Folio';
+const sessions = new Map(); // webContents.id -> Session
+let lastFocusedSession = null;
+
+// Resolve the Session that owns a given webContents (an IPC sender).
+function sessionFor(webContents) {
+  return webContents ? sessions.get(webContents.id) ?? null : null;
+}
+
+// The Session for the currently focused window, falling back to the most
+// recently focused one (menu actions can fire on macOS with no window focused).
+function focusedSession() {
+  const win = BrowserWindow.getFocusedWindow();
+  if (win && sessions.has(win.webContents.id)) {
+    return sessions.get(win.webContents.id);
+  }
+  if (lastFocusedSession && !lastFocusedSession.win.isDestroyed()) {
+    return lastFocusedSession;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------------------
 // Paths
@@ -38,11 +73,11 @@ function builtinDocPath(file) {
 // Folder mode: file-explorer tree + internal link navigation
 // ---------------------------------------------------------------------------
 const {
-  isMarkdownFile,
   scanFolder,
   entryDocFor,
   resolveNavTarget,
   searchInFolder,
+  invalidateSearchCache,
 } = require('./folder');
 
 // Built-in documents shown from the Help menu. Opened as *untitled* so they are
@@ -122,11 +157,15 @@ function applyAppearance() {
 // ---------------------------------------------------------------------------
 // Window + title
 // ---------------------------------------------------------------------------
-function createWindow() {
-  const win = store.get('window') || { width: 1100, height: 820 };
-  mainWindow = new BrowserWindow({
-    width: win.width,
-    height: win.height,
+// Create a new application window with its own Session. `openTarget` optionally
+// seeds what the window opens once its renderer is ready: { path } for a file,
+// { folder } for a directory (explorer mode). With no target the window shows
+// the Welcome document.
+function createWindow(openTarget = null) {
+  const bounds = store.get('window') || { width: 1100, height: 820 };
+  const win = new BrowserWindow({
+    width: bounds.width,
+    height: bounds.height,
     minWidth: 640,
     minHeight: 480,
     backgroundColor: '#ffffff',
@@ -140,92 +179,130 @@ function createWindow() {
     },
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+  const session = new Session(win);
+  if (openTarget && openTarget.path) session.pendingOpenPath = openTarget.path;
+  if (openTarget && openTarget.folder) session.pendingOpenFolder = openTarget.folder;
+  sessions.set(session.id, session);
+  lastFocusedSession = session;
 
-  mainWindow.on('close', (e) => {
-    if (forceClose || !isDirty) {
-      persistWindowBounds();
+  // Security: never let renderer content open new windows or navigate the top
+  // frame away from the local app shell (they would inherit the preload bridge).
+  // External http(s) links are routed through the vetted open-external channel.
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    return { action: 'deny' };
+  });
+  win.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith('file://')) {
+      e.preventDefault();
+      if (/^https?:\/\//i.test(url)) shell.openExternal(url);
+    }
+  });
+
+  win.loadFile(path.join(__dirname, 'renderer', 'index.html'));
+
+  win.on('focus', () => {
+    lastFocusedSession = session;
+    rebuildMenu();
+  });
+
+  win.on('close', (e) => {
+    if (session.forceClose || !session.isDirty) {
+      persistWindowBounds(session);
       return;
     }
     e.preventDefault();
-    promptUnsaved().then((proceed) => {
+    promptUnsaved(session).then((proceed) => {
       if (proceed) {
-        forceClose = true;
-        mainWindow.close();
+        session.forceClose = true;
+        win.close();
       }
     });
   });
 
-  mainWindow.on('closed', () => {
-    mainWindow = null;
+  win.on('closed', () => {
+    stopWatching(session);
+    sessions.delete(session.id);
+    if (lastFocusedSession === session) lastFocusedSession = null;
   });
 
   rebuildMenu();
-  updateTitle();
+  updateTitle(session);
   applyAppearance();
+  return session;
 }
 
-function persistWindowBounds() {
-  if (!mainWindow) return;
-  const [width, height] = mainWindow.getSize();
+function persistWindowBounds(session) {
+  if (!session || session.win.isDestroyed()) return;
+  const [width, height] = session.win.getSize();
   store.set('window', { width, height });
 }
 
-function updateTitle() {
-  if (!mainWindow) return;
-  const base = currentPath ? path.basename(currentPath) : currentName || 'Untitled';
-  mainWindow.setTitle(`${isDirty ? '\u2022 ' : ''}${base} - Folio`);
+function updateTitle(session) {
+  if (!session || session.win.isDestroyed()) return;
+  const base = session.currentPath
+    ? path.basename(session.currentPath)
+    : session.currentName || 'Untitled';
+  session.win.setTitle(`${session.isDirty ? '\u2022 ' : ''}${base} - Folio`);
 }
 
-function setDirty(value) {
-  isDirty = !!value;
-  updateTitle();
+function setDirty(session, value) {
+  if (!session) return;
+  session.isDirty = !!value;
+  updateTitle(session);
 }
 
 // ---------------------------------------------------------------------------
 // Menu
 // ---------------------------------------------------------------------------
 function rebuildMenu() {
+  const session = focusedSession();
   const template = buildMenu({
     isMac: process.platform === 'darwin',
     styleFamily: store.get('styleFamily'),
     appearance: store.get('appearance'),
     pageWidth: store.get('pageWidth'),
     recentFiles: store.get('recentFiles') || [],
-    hasFolder: !!currentFolder,
+    hasFolder: !!(session && session.currentFolder),
+    hasFile: !!(session && session.currentPath),
     actions,
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// Push the composed theme stack to the renderer.
-function pushTheme() {
-  send('set-theme', { files: composeThemeFiles() });
+// Push the composed theme stack to every open window.
+function pushThemeAll() {
+  const payload = { files: composeThemeFiles() };
+  for (const session of sessions.values()) send(session, 'set-theme', payload);
 }
 
 const actions = {
-  open: () => doOpen(),
-  openFolder: () => doOpenFolder(),
-  closeFolder: () => doCloseFolder(),
-  openRecent: (p) => loadFile(p),
+  newWindow: () => createWindow(),
+  open: () => withSession((s) => doOpen(s)),
+  openFolder: () => withSession((s) => doOpenFolder(s)),
+  closeFolder: () => withSession((s) => doCloseFolder(s)),
+  openRecent: (p) => withSession((s) => loadFile(s, p)),
   clearRecent: () => {
     store.clearRecent();
     rebuildMenu();
   },
-  save: () => doSave(),
-  saveAs: () => doSaveAs(),
-  exportPDF: () => doExportPDF(),
-  newFile: () => doNew(),
-  toggleSource: () => send('command', { name: 'toggle-source' }),
-  toggleOutline: () => send('command', { name: 'toggle-outline' }),
-  toggleFiles: () => send('command', { name: 'toggle-files' }),
-  zoomIn: () => send('command', { name: 'zoom-in' }),
-  zoomOut: () => send('command', { name: 'zoom-out' }),
-  zoomReset: () => send('command', { name: 'zoom-reset' }),
-  find: () => send('command', { name: 'find' }),
+  save: () => withSession((s) => doSave(s)),
+  saveAs: () => withSession((s) => doSaveAs(s)),
+  reload: () => withSession((s) => doReload(s)),
+  exportPDF: () => withSession((s) => doExportPDF(s)),
+  newFile: () => withSession((s) => doNew(s)),
+  toggleSource: () => sendFocused('command', { name: 'toggle-source' }),
+  toggleOutline: () => sendFocused('command', { name: 'toggle-outline' }),
+  toggleFiles: () => sendFocused('command', { name: 'toggle-files' }),
+  zoomIn: () => sendFocused('command', { name: 'zoom-in' }),
+  zoomOut: () => sendFocused('command', { name: 'zoom-out' }),
+  zoomReset: () => sendFocused('command', { name: 'zoom-reset' }),
+  find: () => sendFocused('command', { name: 'find' }),
   findInFiles: () => {
-    if (!currentFolder) {
-      dialog.showMessageBox(mainWindow, {
+    const session = focusedSession();
+    if (!session) return;
+    if (!session.currentFolder) {
+      dialog.showMessageBox(session.win, {
         type: 'info',
         title: 'Find in Files',
         message: 'Find in Files searches an open folder.',
@@ -233,11 +310,11 @@ const actions = {
       });
       return;
     }
-    send('command', { name: 'find-in-files' });
+    send(session, 'command', { name: 'find-in-files' });
   },
   setStyleFamily: (family) => {
     store.set('styleFamily', family);
-    pushTheme();
+    pushThemeAll();
     rebuildMenu();
   },
   setAppearance: (appearance) => {
@@ -247,19 +324,30 @@ const actions = {
   },
   setPageWidth: (width) => {
     store.set('pageWidth', width);
-    pushTheme();
+    pushThemeAll();
     rebuildMenu();
   },
-  about: () => showAbout(),
-  openRepo: () => shell.openExternal(REPO_URL),
-  openWelcome: () => openBuiltinDoc('welcome'),
-  openFormattingTour: () => openBuiltinDoc('formatting-tour'),
+  about: () => showAbout(focusedSession()),
+  openWelcome: () => withSession((s) => openBuiltinDoc(s, 'welcome')),
+  openFormattingTour: () => withSession((s) => openBuiltinDoc(s, 'formatting-tour')),
 };
 
-function send(channel, payload) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send(channel, payload);
+// Run an action against the focused window's Session, creating a new window when
+// none is focused (e.g. New/Open triggered on macOS with all windows closed).
+function withSession(fn) {
+  let session = focusedSession();
+  if (!session) session = createWindow();
+  return fn(session);
+}
+
+function send(session, channel, payload) {
+  if (session && !session.win.isDestroyed()) {
+    session.win.webContents.send(channel, payload);
   }
+}
+
+function sendFocused(channel, payload) {
+  send(focusedSession(), channel, payload);
 }
 
 // ---------------------------------------------------------------------------
@@ -287,27 +375,15 @@ function pathArgFrom(argv) {
   return null;
 }
 
-// Open a folder requested from outside the app (CLI arg on a running instance),
-// honoring unsaved changes first.
-async function openExternalFolder(dir) {
-  if (!(await confirmDiscardIfDirty())) return;
-  openFolder(dir, { openEntry: true });
-}
-// or macOS Finder "open-file"), honoring unsaved changes first.
-async function openExternalPath(filePath) {
-  if (!(await confirmDiscardIfDirty())) return;
-  loadFile(filePath);
-}
-
 // Open a bundled document (welcome / formatting tour) as an untitled buffer, so
 // it can be read and edited but Save won't overwrite the shipped copy.
-async function openBuiltinDoc(key) {
-  if (!(await confirmDiscardIfDirty())) return;
-  loadBuiltinDoc(key);
+async function openBuiltinDoc(session, key) {
+  if (!(await confirmDiscardIfDirty(session))) return;
+  loadBuiltinDoc(session, key);
 }
 
 // Load a bundled document without a dirty-check (caller's responsibility).
-function loadBuiltinDoc(key) {
+function loadBuiltinDoc(session, key) {
   const doc = BUILTIN_DOCS[key];
   if (!doc) return;
   let content;
@@ -317,73 +393,169 @@ function loadBuiltinDoc(key) {
     dialog.showErrorBox('Folio', `Cannot open ${doc.name}.\n\n${err.message}`);
     return;
   }
-  currentPath = null;
-  currentName = doc.name;
-  setDirty(false);
-  send('load-document', { path: null, content, name: doc.name });
-  updateTitle();
-}
-
-// Close the open folder: clear the explorer, forget it, and return to Welcome.
-async function doCloseFolder() {
-  if (!currentFolder) return;
-  if (!(await confirmDiscardIfDirty())) return;
-  currentFolder = null;
-  store.set('folder', null);
-  store.set('filesVisible', false);
-  send('open-folder', null); // renderer hides + clears the explorer
-  loadBuiltinDoc('welcome');
+  session.currentPath = null;
+  session.currentName = doc.name;
+  setDirty(session, false);
+  stopWatching(session);
+  send(session, 'load-document', { path: null, content, name: doc.name });
+  updateTitle(session);
   rebuildMenu();
 }
 
-async function loadFile(filePath, anchor = null) {
+// Close the open folder: clear the explorer, forget it, and return to Welcome.
+async function doCloseFolder(session) {
+  if (!session.currentFolder) return;
+  if (!(await confirmDiscardIfDirty(session))) return;
+  session.currentFolder = null;
+  store.set('folder', null);
+  store.set('filesVisible', false);
+  invalidateSearchCache();
+  send(session, 'open-folder', null); // renderer hides + clears the explorer
+  loadBuiltinDoc(session, 'welcome');
+  rebuildMenu();
+}
+
+// ---------------------------------------------------------------------------
+// External-change watching (live reload)
+// ---------------------------------------------------------------------------
+
+// Stop watching whatever file this session was watching, if any.
+function stopWatching(session) {
+  if (session.watchedPath) {
+    fs.unwatchFile(session.watchedPath, session.watchListener);
+    session.watchedPath = null;
+    session.watchListener = null;
+  }
+}
+
+// Watch the session's current file for out-of-app edits. Uses fs.watchFile
+// (polling) rather than fs.watch because it is reliable across editors that save
+// atomically (write to a temp file then rename), which invalidate an fs.watch
+// handle. The 1s poll is negligible per document and gives near-instant live
+// reload for a viewer.
+function watchCurrentFile(session) {
+  stopWatching(session);
+  if (!session.currentPath) return;
+  const target = session.currentPath;
+  try {
+    session.lastMtimeMs = fs.statSync(target).mtimeMs;
+  } catch (_) {
+    session.lastMtimeMs = 0;
+  }
+  const listener = (curr) => {
+    // Only react to the file we still have open, and ignore deletions (mtime 0)
+    // so a transient save-rename gap doesn't blank the view.
+    if (target !== session.currentPath || curr.mtimeMs === 0) return;
+    if (curr.mtimeMs === session.lastMtimeMs) return;
+    session.lastMtimeMs = curr.mtimeMs;
+    onExternalChange(session);
+  };
+  fs.watchFile(target, { interval: 1000 }, listener);
+  session.watchedPath = target;
+  session.watchListener = listener;
+}
+
+// The open file changed on disk. Reload silently when the buffer is clean; when the
+// user has unsaved edits, ask before discarding them.
+async function onExternalChange(session) {
+  if (!session.currentPath) return;
+  if (session.isDirty) {
+    const { response } = await dialog.showMessageBox(session.win, {
+      type: 'warning',
+      buttons: ['Reload', 'Keep My Changes'],
+      defaultId: 1,
+      cancelId: 1,
+      title: 'File changed on disk',
+      message: `${path.basename(session.currentPath)} was modified outside Folio.`,
+      detail: 'Reloading will discard the unsaved changes you have made here.',
+    });
+    if (response !== 0) return;
+  }
+  reloadCurrentFile(session);
+}
+
+// Re-read the session's current file and push it to the renderer, preserving the
+// reading position. Does not touch the recent list. Refreshes the watched mtime so
+// the re-read is not itself mistaken for another external change.
+function reloadCurrentFile(session) {
+  if (!session.currentPath) return;
+  try {
+    const content = fs.readFileSync(session.currentPath, 'utf8');
+    try {
+      session.lastMtimeMs = fs.statSync(session.currentPath).mtimeMs;
+    } catch (_) {
+      /* leave lastMtimeMs as-is */
+    }
+    setDirty(session, false);
+    send(session, 'load-document', {
+      path: session.currentPath,
+      content,
+      baseUrl: pathToFileURL(session.currentPath).href,
+      preserveScroll: true,
+    });
+    updateTitle(session);
+  } catch (err) {
+    dialog.showErrorBox('Folio — cannot reload file', `${session.currentPath}\n\n${err.message}`);
+  }
+}
+
+// Manual File ▸ Reload from Disk. No-op for untitled/built-in docs.
+async function doReload(session) {
+  if (!session.currentPath) return;
+  if (session.isDirty && !(await confirmDiscardIfDirty(session))) return;
+  reloadCurrentFile(session);
+}
+
+async function loadFile(session, filePath, anchor = null) {
   try {
     const content = fs.readFileSync(filePath, 'utf8');
-    currentPath = filePath;
-    currentName = path.basename(filePath);
+    session.currentPath = filePath;
+    session.currentName = path.basename(filePath);
     store.addRecent(filePath);
-    setDirty(false);
-    send('load-document', {
+    setDirty(session, false);
+    watchCurrentFile(session);
+    send(session, 'load-document', {
       path: filePath,
       content,
       baseUrl: pathToFileURL(filePath).href,
       anchor: anchor || null,
     });
     rebuildMenu();
-    updateTitle();
+    updateTitle(session);
   } catch (err) {
     dialog.showErrorBox('Folio — cannot open file', `${filePath}\n\n${err.message}`);
   }
 }
 
-async function doOpenFolder() {
-  if (!(await confirmDiscardIfDirty())) return;
-  const res = await dialog.showOpenDialog(mainWindow, {
+async function doOpenFolder(session) {
+  if (!(await confirmDiscardIfDirty(session))) return;
+  const res = await dialog.showOpenDialog(session.win, {
     title: 'Open Folder',
     properties: ['openDirectory'],
   });
   if (res.canceled || !res.filePaths.length) return;
-  openFolder(res.filePaths[0], { openEntry: true });
+  openFolder(session, res.filePaths[0], { openEntry: true });
 }
 
 // Scan a folder, push its tree to the renderer's file explorer, and optionally
 // open its entry document. Dirty-check is the caller's responsibility.
-function openFolder(dir, { openEntry } = {}) {
+function openFolder(session, dir, { openEntry } = {}) {
   const tree = scanFolder(dir);
-  currentFolder = dir;
+  session.currentFolder = dir;
   store.set('folder', dir);
   store.set('filesVisible', true);
-  send('open-folder', { root: dir, name: path.basename(dir) || dir, tree });
+  invalidateSearchCache();
+  send(session, 'open-folder', { root: dir, name: path.basename(dir) || dir, tree });
   if (openEntry) {
     const entry = entryDocFor(tree);
-    if (entry) loadFile(entry);
+    if (entry) loadFile(session, entry);
   }
   rebuildMenu();
 }
 
-async function doOpen() {
-  if (!(await confirmDiscardIfDirty())) return;
-  const res = await dialog.showOpenDialog(mainWindow, {
+async function doOpen(session) {
+  if (!(await confirmDiscardIfDirty(session))) return;
+  const res = await dialog.showOpenDialog(session.win, {
     title: 'Open Markdown file',
     properties: ['openFile'],
     filters: [
@@ -392,62 +564,113 @@ async function doOpen() {
     ],
   });
   if (res.canceled || !res.filePaths.length) return;
-  loadFile(res.filePaths[0]);
+  loadFile(session, res.filePaths[0]);
 }
 
-async function doNew() {
-  if (!(await confirmDiscardIfDirty())) return;
-  currentPath = null;
-  currentName = 'Untitled';
-  setDirty(false);
-  send('load-document', { path: null, content: '' });
-  updateTitle();
+async function doNew(session) {
+  if (!(await confirmDiscardIfDirty(session))) return;
+  session.currentPath = null;
+  session.currentName = 'Untitled';
+  setDirty(session, false);
+  stopWatching(session);
+  send(session, 'load-document', { path: null, content: '' });
+  updateTitle(session);
+  rebuildMenu();
 }
 
-async function getEditorContent() {
-  if (!mainWindow) return '';
-  return mainWindow.webContents.executeJavaScript('window.folio.getContent()');
+// ---------------------------------------------------------------------------
+// Main -> renderer request/response
+//
+// A few operations (save, export) need the renderer's current editor content or
+// need it to switch out of source mode first. Rather than reach into the page
+// with executeJavaScript() (which would run in the main world and bypass context
+// isolation), we send a tokened request over `folio-request` and await the reply
+// on `folio-response`. Each request is keyed to the owning window's webContents so
+// replies can't cross wires between windows.
+// ---------------------------------------------------------------------------
+let nextRequestId = 1;
+const pendingRequests = new Map(); // id -> { resolve, timer }
+
+ipcMain.on('folio-response', (_e, { id, value } = {}) => {
+  const entry = pendingRequests.get(id);
+  if (!entry) return;
+  clearTimeout(entry.timer);
+  pendingRequests.delete(id);
+  entry.resolve(value);
+});
+
+// Ask a session's renderer for something and await its reply. `kind` is
+// 'content' (the current editor text) or 'prepare-export' (leave source mode,
+// resolve true). Resolves to a fallback after a short timeout so a wedged
+// renderer can't hang a save forever.
+function ask(session, kind, { timeoutMs = 4000, fallback = null } = {}) {
+  if (!session || session.win.isDestroyed()) return Promise.resolve(fallback);
+  const id = nextRequestId++;
+  return new Promise((resolve) => {
+    const timer = setTimeout(() => {
+      pendingRequests.delete(id);
+      resolve(fallback);
+    }, timeoutMs);
+    pendingRequests.set(id, { resolve, timer });
+    send(session, 'folio-request', { id, kind });
+  });
 }
 
 async function writeFile(filePath, content) {
   fs.writeFileSync(filePath, content, 'utf8');
 }
 
-async function doSave() {
-  if (!currentPath) return doSaveAs();
-  const content = await getEditorContent();
+// Save the session's document. Returns true only after a successful write, false
+// on cancel or error, so callers (e.g. the unsaved-changes prompt) can tell
+// whether it is safe to proceed.
+async function doSave(session) {
+  if (!session.currentPath) return doSaveAs(session);
+  const content = await ask(session, 'content', { fallback: null });
+  if (content == null) return false;
   try {
-    await writeFile(currentPath, content);
-    store.addRecent(currentPath);
-    setDirty(false);
-    send('saved');
+    await writeFile(session.currentPath, content);
+    try {
+      session.lastMtimeMs = fs.statSync(session.currentPath).mtimeMs;
+    } catch (_) {
+      /* ignore */
+    }
+    store.addRecent(session.currentPath);
+    setDirty(session, false);
+    send(session, 'saved');
     rebuildMenu();
+    return true;
   } catch (err) {
-    dialog.showErrorBox('Folio — cannot save file', `${currentPath}\n\n${err.message}`);
+    dialog.showErrorBox('Folio — cannot save file', `${session.currentPath}\n\n${err.message}`);
+    return false;
   }
 }
 
-async function doSaveAs() {
-  const res = await dialog.showSaveDialog(mainWindow, {
+async function doSaveAs(session) {
+  const res = await dialog.showSaveDialog(session.win, {
     title: 'Save Markdown file',
-    defaultPath: currentPath || `${currentName || 'Untitled'}.md`,
+    defaultPath: session.currentPath || `${session.currentName || 'Untitled'}.md`,
     filters: [
       { name: 'Markdown', extensions: ['md', 'markdown'] },
       { name: 'All files', extensions: ['*'] },
     ],
   });
   if (res.canceled || !res.filePath) return false;
-  const content = await getEditorContent();
+  const content = await ask(session, 'content', { fallback: null });
+  if (content == null) return false;
   try {
     await writeFile(res.filePath, content);
-    currentPath = res.filePath;
-    currentName = path.basename(res.filePath);
+    session.currentPath = res.filePath;
+    session.currentName = path.basename(res.filePath);
     store.addRecent(res.filePath);
-    setDirty(false);
-    send('saved');
-    send('document-path-changed', { path: res.filePath, baseUrl: pathToFileURL(res.filePath).href });
+    setDirty(session, false);
+    watchCurrentFile(session);
+    send(session, 'saved');
+    send(session, 'document-path-changed', {
+      path: res.filePath,
+      baseUrl: pathToFileURL(res.filePath).href,
+    });
     rebuildMenu();
-    updateTitle();
+    updateTitle(session);
     return true;
   } catch (err) {
     dialog.showErrorBox('Folio — cannot save file', `${res.filePath}\n\n${err.message}`);
@@ -459,15 +682,15 @@ function pageSizeForWidth() {
   return store.get('pageWidth') === 'letter' ? 'Letter' : 'A4';
 }
 
-async function doExportPDF() {
-  if (!mainWindow) return;
+async function doExportPDF(session) {
+  if (!session || session.win.isDestroyed()) return;
   // Ensure the rendered preview is showing (not the source editor) before print.
-  await mainWindow.webContents.executeJavaScript('window.folio.prepareForExport()');
+  await ask(session, 'prepare-export', { fallback: true });
 
-  const suggested = currentPath
-    ? currentPath.replace(/\.[^.]+$/, '.pdf')
-    : `${currentName || 'Untitled'}.pdf`;
-  const res = await dialog.showSaveDialog(mainWindow, {
+  const suggested = session.currentPath
+    ? session.currentPath.replace(/\.[^.]+$/, '.pdf')
+    : `${session.currentName || 'Untitled'}.pdf`;
+  const res = await dialog.showSaveDialog(session.win, {
     title: 'Export to PDF',
     defaultPath: suggested,
     filters: [{ name: 'PDF', extensions: ['pdf'] }],
@@ -475,7 +698,7 @@ async function doExportPDF() {
   if (res.canceled || !res.filePath) return;
 
   try {
-    const data = await mainWindow.webContents.printToPDF({
+    const data = await session.win.webContents.printToPDF({
       pageSize: pageSizeForWidth(),
       printBackground: true,
       margins: { marginType: 'default' },
@@ -489,9 +712,9 @@ async function doExportPDF() {
 // ---------------------------------------------------------------------------
 // Unsaved-changes prompts
 // ---------------------------------------------------------------------------
-async function promptUnsaved() {
+async function promptUnsaved(session) {
   // Returns true if it is OK to proceed (close/replace the document).
-  const { response } = await dialog.showMessageBox(mainWindow, {
+  const { response } = await dialog.showMessageBox(session.win, {
     type: 'warning',
     buttons: ['Save', "Don't Save", 'Cancel'],
     defaultId: 0,
@@ -502,71 +725,66 @@ async function promptUnsaved() {
   });
   if (response === 2) return false; // cancel
   if (response === 1) return true; // don't save
-  // Save
-  if (!currentPath) {
-    return doSaveAs();
-  }
-  await doSave();
-  return true;
+  // Save — only proceed if the write actually succeeded.
+  return doSave(session);
 }
 
-async function confirmDiscardIfDirty() {
-  if (!isDirty) return true;
-  return promptUnsaved();
+async function confirmDiscardIfDirty(session) {
+  if (!session.isDirty) return true;
+  return promptUnsaved(session);
 }
 
 // ---------------------------------------------------------------------------
 // About dialog
 // ---------------------------------------------------------------------------
-function showAbout() {
-  dialog.showMessageBox(mainWindow, {
+function showAbout(session) {
+  dialog.showMessageBox(session ? session.win : undefined, {
     type: 'info',
     title: 'About Folio',
     message: `Folio ${app.getVersion()}`,
     detail:
-      'A lightweight, themeable Markdown editor & viewer with a Typora-like look.\n\n' +
+      'A lightweight, themeable Markdown editor and viewer with a Typora-like look.\n\n' +
       'Folio is not affiliated with, endorsed by, or sponsored by the Typora team. ' +
       '"Typora" is a trademark of its respective owner and is referenced solely to ' +
       'describe theme compatibility.\n\n' +
-      'Built with Electron, CodeMirror and markdown-it.\n' +
-      REPO_URL,
-    buttons: ['Open GitHub', 'Close'],
-    defaultId: 1,
-    cancelId: 1,
-  }).then(({ response }) => {
-    if (response === 0) shell.openExternal(REPO_URL);
+      'Built with Electron, CodeMirror and markdown-it.',
+    buttons: ['Close'],
+    defaultId: 0,
+    cancelId: 0,
   });
 }
 
 // ---------------------------------------------------------------------------
 // IPC from renderer
 // ---------------------------------------------------------------------------
-ipcMain.handle('get-init', () => {
+ipcMain.handle('get-init', (event) => {
+  const session = sessionFor(event.sender);
   let document = null;
   let folder = null;
   let filesVisible = false;
 
   const openAsDocument = (target) => {
     const content = fs.readFileSync(target, 'utf8');
-    currentPath = target;
-    currentName = path.basename(target);
+    session.currentPath = target;
+    session.currentName = path.basename(target);
     store.addRecent(target);
-    setDirty(false);
+    setDirty(session, false);
+    watchCurrentFile(session);
     rebuildMenu();
-    updateTitle();
-    return { path: target, content, name: currentName, baseUrl: pathToFileURL(target).href };
+    updateTitle(session);
+    return { path: target, content, name: session.currentName, baseUrl: pathToFileURL(target).href };
   };
 
-  // If Folio was launched pointing at a folder, start in file-explorer mode and
-  // open that folder's entry document.
-  if (pendingOpenFolder) {
-    const dir = pendingOpenFolder;
-    pendingOpenFolder = null;
+  // If this window was launched pointing at a folder, start in file-explorer mode
+  // and open that folder's entry document.
+  if (session && session.pendingOpenFolder) {
+    const dir = session.pendingOpenFolder;
+    session.pendingOpenFolder = null;
     try {
       if (fs.statSync(dir).isDirectory()) {
         const tree = scanFolder(dir);
         folder = { root: dir, name: path.basename(dir) || dir, tree };
-        currentFolder = dir;
+        session.currentFolder = dir;
         store.set('folder', dir);
         filesVisible = true;
         const entry = entryDocFor(tree);
@@ -583,11 +801,11 @@ ipcMain.handle('get-init', () => {
     }
   }
 
-  // If Folio was launched with a file path (CLI arg or macOS open-file), open
-  // that file instead of the welcome document.
-  if (!document && pendingOpenPath) {
-    const target = pendingOpenPath;
-    pendingOpenPath = null;
+  // If this window was launched with a file path (CLI arg or macOS open-file),
+  // open that file instead of the welcome document.
+  if (!document && session && session.pendingOpenPath) {
+    const target = session.pendingOpenPath;
+    session.pendingOpenPath = null;
     try {
       document = openAsDocument(target);
     } catch (err) {
@@ -624,7 +842,10 @@ ipcMain.handle('get-init', () => {
   };
 });
 
-ipcMain.on('dirty-changed', (_e, value) => setDirty(value));
+ipcMain.on('dirty-changed', (event, value) => {
+  const session = sessionFor(event.sender);
+  if (session) setDirty(session, value);
+});
 
 ipcMain.on('state-changed', (_e, state) => {
   if (typeof state.sourceMode === 'boolean') store.set('sourceMode', state.sourceMode);
@@ -637,28 +858,77 @@ ipcMain.on('open-external', (_e, url) => {
   if (/^https?:\/\//i.test(url)) shell.openExternal(url);
 });
 
-// Content search across every markdown file in the open folder (Find in Files).
-ipcMain.handle('search-files', (_e, query) => {
-  if (!currentFolder) return { query, files: [], truncated: false };
+// Content search across every markdown file in the sender window's open folder.
+ipcMain.handle('search-files', (event, query) => {
+  const session = sessionFor(event.sender);
+  if (!session || !session.currentFolder) return { query, files: [], truncated: false };
   try {
-    return searchInFolder(currentFolder, query);
+    return searchInFolder(session.currentFolder, query);
   } catch (_) {
     return { query, files: [], truncated: false };
   }
 });
 
+// Extensions we refuse to hand to the OS shell from an in-document link: anything
+// that would execute code or run a script interpreter if double-clicked.
+const UNSAFE_OPEN_EXTENSIONS = new Set([
+  '.exe', '.bat', '.cmd', '.com', '.msi', '.scr', '.pif', '.cpl', '.ps1', '.psm1',
+  '.vbs', '.vbe', '.js', '.jse', '.wsf', '.wsh', '.hta', '.jar', '.reg', '.lnk',
+  '.sh', '.bash', '.zsh', '.py', '.rb', '.pl', '.app', '.command',
+]);
+
+// Open a non-markdown local target (e.g. a PDF or image linked from a doc) through
+// the OS, but only after guarding against the obvious footguns: no UNC/remote
+// paths, no executable/script types, and always an explicit confirmation showing
+// the resolved absolute path so a malicious link can't silently launch anything.
+async function openExternalTarget(session, target) {
+  const win = session ? session.win : undefined;
+  if (/^(\\\\|\/\/)/.test(target)) {
+    dialog.showMessageBox(win, {
+      type: 'warning',
+      title: 'Folio',
+      message: 'Blocked opening a network location.',
+      detail: `${target}\n\nFolio does not open UNC or remote paths from document links.`,
+      buttons: ['OK'],
+    });
+    return;
+  }
+  if (UNSAFE_OPEN_EXTENSIONS.has(path.extname(target).toLowerCase())) {
+    dialog.showMessageBox(win, {
+      type: 'warning',
+      title: 'Folio',
+      message: 'Blocked opening an executable or script.',
+      detail: `${target}\n\nFor safety, Folio does not launch this type of file from a document link.`,
+      buttons: ['OK'],
+    });
+    return;
+  }
+  const { response } = await dialog.showMessageBox(win, {
+    type: 'question',
+    title: 'Open external file?',
+    message: 'Open this file with its default application?',
+    detail: path.resolve(target),
+    buttons: ['Open', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+  });
+  if (response === 0) shell.openPath(target);
+}
+
 // Navigation from the file explorer (a file click) or from an in-document link
 // (relative path / folder). Honors unsaved changes before switching documents.
-ipcMain.handle('navigate', async (_e, payload) => {
+ipcMain.handle('navigate', async (event, payload) => {
+  const session = sessionFor(event.sender);
+  if (!session) return { ok: false };
   const target = resolveNavTarget(payload);
   if (!target) return { ok: false };
   switch (target.kind) {
     case 'markdown':
-      if (!(await confirmDiscardIfDirty())) return { ok: false, canceled: true };
-      loadFile(target.path, target.anchor);
+      if (!(await confirmDiscardIfDirty(session))) return { ok: false, canceled: true };
+      loadFile(session, target.path, target.anchor);
       return { ok: true };
     case 'folder-empty':
-      dialog.showMessageBox(mainWindow, {
+      dialog.showMessageBox(session.win, {
         type: 'info',
         title: 'Folio',
         message: 'Nothing to display for this folder.',
@@ -667,10 +937,10 @@ ipcMain.handle('navigate', async (_e, payload) => {
       });
       return { ok: false };
     case 'external':
-      shell.openPath(target.path);
+      await openExternalTarget(session, target.path);
       return { ok: false, external: true };
     case 'missing':
-      dialog.showMessageBox(mainWindow, {
+      dialog.showMessageBox(session.win, {
         type: 'warning',
         title: 'Folio',
         message: 'Cannot find the linked item.',
@@ -690,34 +960,43 @@ const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
+  // A second launch (e.g. `folio some.md` while already running) opens the given
+  // path in a NEW window rather than stealing the current one.
   app.on('second-instance', (_e, argv) => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-      const arg = pathArgFrom(argv);
-      if (arg && arg.isDir) openExternalFolder(arg.path);
-      else if (arg) openExternalPath(arg.path);
+    const arg = pathArgFrom(argv);
+    if (arg && arg.isDir) createWindow({ folder: arg.path });
+    else if (arg) createWindow({ path: arg.path });
+    else {
+      const session = focusedSession();
+      if (session) {
+        if (session.win.isMinimized()) session.win.restore();
+        session.win.focus();
+      } else {
+        createWindow();
+      }
     }
   });
 
   // macOS: files opened via Finder / `open` arrive through this event, which
   // can fire before the app is ready.
+  let pendingLaunchTarget = null;
   app.on('open-file', (e, filePath) => {
     e.preventDefault();
-    if (mainWindow) {
-      openExternalPath(filePath);
+    if (app.isReady()) {
+      createWindow({ path: filePath });
     } else {
-      pendingOpenPath = filePath;
+      pendingLaunchTarget = { path: filePath };
     }
   });
 
   // Windows/Linux: a file or folder path passed on the command line at launch.
   const launchArg = pathArgFrom(process.argv);
-  if (launchArg && launchArg.isDir) pendingOpenFolder = launchArg.path;
-  else if (launchArg) pendingOpenPath = launchArg.path;
+  if (launchArg && launchArg.isDir) pendingLaunchTarget = { folder: launchArg.path };
+  else if (launchArg) pendingLaunchTarget = { path: launchArg.path };
 
   app.whenReady().then(() => {
-    createWindow();
+    createWindow(pendingLaunchTarget);
+    pendingLaunchTarget = null;
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();
     });

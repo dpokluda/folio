@@ -45,6 +45,11 @@ function scanFolder(dir, depth = 0) {
   return [...dirs, ...files];
 }
 
+// Canonical set of "folder entry document" filenames, in preference order,
+// compared case-insensitively. Both entryDocFor (explorer tree) and
+// folderIndexDoc (on-disk lookup) are driven from this single list.
+const INDEX_DOC_NAMES = ['_index.md', 'readme.md', 'index.md'];
+
 function firstMarkdownIn(nodes) {
   for (const n of nodes) if (n.type === 'file') return n.path;
   for (const n of nodes) {
@@ -60,8 +65,7 @@ function firstMarkdownIn(nodes) {
 // (_index.md / README.md / index.md) at the top level, else the first
 // markdown file found walking the tree depth-first.
 function entryDocFor(tree) {
-  const preferred = ['_index.md', 'readme.md', 'index.md'];
-  for (const pref of preferred) {
+  for (const pref of INDEX_DOC_NAMES) {
     const hit = tree.find((n) => n.type === 'file' && n.name.toLowerCase() === pref);
     if (hit) return hit.path;
   }
@@ -69,11 +73,19 @@ function entryDocFor(tree) {
 }
 
 // The markdown file that represents a folder link target (a folder "renders"
-// its index document). Returns null if the folder has no index doc.
+// its index document). Case-insensitive on all platforms. Returns null if the
+// folder has no index doc.
 function folderIndexDoc(dir) {
-  for (const name of ['_index.md', 'README.md', 'readme.md', 'index.md']) {
-    const p = path.join(dir, name);
-    if (fs.existsSync(p)) return p;
+  let entries;
+  try {
+    entries = fs.readdirSync(dir, { withFileTypes: true });
+  } catch (_) {
+    return null;
+  }
+  const files = entries.filter((e) => e.isFile());
+  for (const pref of INDEX_DOC_NAMES) {
+    const hit = files.find((e) => e.name.toLowerCase() === pref);
+    if (hit) return path.join(dir, hit.name);
   }
   return null;
 }
@@ -146,24 +158,64 @@ function collectMarkdownFiles(tree, out = []) {
 const SEARCH_MAX_MATCHES_PER_FILE = 50;
 const SEARCH_MAX_TOTAL_MATCHES = 1000;
 const SEARCH_MAX_FILES = 500;
+const FILE_LIST_TTL_MS = 4000;
+
+// Per-folder caches so a burst of keystrokes doesn't re-walk the tree and
+// re-read every file on each query. The file list is cached per folder with a
+// short TTL; file contents are cached per path and revalidated by mtime, so an
+// edited file is re-read but unchanged ones are reused.
+let _fileListCache = { dir: null, at: 0, files: [] };
+const _contentCache = new Map(); // path -> { mtimeMs, lines }
+
+// Discard cached search state. Called when the open folder changes.
+function invalidateSearchCache() {
+  _fileListCache = { dir: null, at: 0, files: [] };
+  _contentCache.clear();
+}
+
+function markdownFilesFor(dir) {
+  const now = Date.now();
+  if (_fileListCache.dir === dir && now - _fileListCache.at < FILE_LIST_TTL_MS) {
+    return _fileListCache.files;
+  }
+  if (_fileListCache.dir !== dir) _contentCache.clear();
+  const files = collectMarkdownFiles(scanFolder(dir));
+  _fileListCache = { dir, at: now, files };
+  return files;
+}
+
+function linesFor(file) {
+  let mtimeMs;
+  try {
+    mtimeMs = fs.statSync(file).mtimeMs;
+  } catch (_) {
+    return null;
+  }
+  const cached = _contentCache.get(file);
+  if (cached && cached.mtimeMs === mtimeMs) return cached.lines;
+  let content;
+  try {
+    content = fs.readFileSync(file, 'utf8');
+  } catch (_) {
+    return null;
+  }
+  const lines = content.split(/\r?\n/);
+  _contentCache.set(file, { mtimeMs, lines });
+  return lines;
+}
 
 // Case-insensitive substring search across every markdown file under `dir`.
 // Returns { query, files: [{ path, name, matches: [{ line, text }] }], truncated }.
-// Pure (fs only) so it can be unit tested without Electron.
+// Uses cached file lists / contents (see above) so repeated queries are cheap.
 function searchInFolder(dir, query) {
   const q = String(query == null ? '' : query).toLowerCase();
   if (!q.trim()) return { query, files: [], truncated: false };
-  const files = collectMarkdownFiles(scanFolder(dir));
+  const files = markdownFilesFor(dir);
   const results = [];
   let total = 0;
   for (const file of files) {
-    let content;
-    try {
-      content = fs.readFileSync(file, 'utf8');
-    } catch (_) {
-      continue;
-    }
-    const lines = content.split(/\r?\n/);
+    const lines = linesFor(file);
+    if (lines == null) continue;
     const matches = [];
     for (let i = 0; i < lines.length; i++) {
       if (lines[i].toLowerCase().includes(q)) {
@@ -180,6 +232,7 @@ function searchInFolder(dir, query) {
 
 module.exports = {
   MD_EXTS,
+  INDEX_DOC_NAMES,
   isMarkdownFile,
   scanFolder,
   entryDocFor,
@@ -187,4 +240,5 @@ module.exports = {
   resolveNavTarget,
   collectMarkdownFiles,
   searchInFolder,
+  invalidateSearchCache,
 };
