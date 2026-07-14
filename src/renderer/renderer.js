@@ -56,6 +56,7 @@ const state = {
   dirty: false,
   themesBaseUrl: '',
   themeFiles: [],
+  docBaseUrl: null,
 };
 
 let editor = null;
@@ -121,12 +122,48 @@ function currentText() {
   return state.sourceMode && editor ? editor.state.doc.toString() : state.docText;
 }
 
+// ---------------------------------------------------------------------------
+// YAML front matter
+// ---------------------------------------------------------------------------
+// A leading `--- ... ---` block would otherwise be mis-parsed (the closing
+// `---` turns the metadata into a giant setext H1). Strip it and render it as
+// a subtle metadata box, the way Typora shows document front matter.
+function splitFrontMatter(text) {
+  const m = /^\uFEFF?---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/.exec(text);
+  if (!m) return { frontMatter: null, body: text };
+  return { frontMatter: m[1], body: text.slice(m[0].length) };
+}
+
+function renderFrontMatter(fm) {
+  return `<pre class="md-front-matter">${md.utils.escapeHtml(fm)}</pre>`;
+}
+
 function renderPreview() {
-  const html = md.render(currentText() || '');
+  const { frontMatter, body } = splitFrontMatter(currentText() || '');
+  let html = md.render(body);
+  if (frontMatter != null) html = renderFrontMatter(frontMatter) + html;
   $write.innerHTML = html;
+  resolveAssets();
   wireLinks();
   buildOutline();
   updateStats();
+}
+
+// Resolve relative asset paths (images) against the open document's folder so
+// they load from disk — the renderer's own origin is the app bundle, not the
+// document. Absolute URLs (http(s), file, data, blob) are left untouched.
+function resolveAssets() {
+  const base = state.docBaseUrl;
+  if (!base) return;
+  $write.querySelectorAll('img[src]').forEach((img) => {
+    const src = img.getAttribute('src') || '';
+    if (!src || /^(?:[a-z]+:|\/\/|#)/i.test(src)) return;
+    try {
+      img.src = new URL(src, base).href;
+    } catch (_) {
+      /* leave as-is */
+    }
+  });
 }
 
 function wireLinks() {
@@ -296,6 +333,7 @@ function markSaved() {
 // ---------------------------------------------------------------------------
 function loadDocument(doc) {
   state.path = doc.path || null;
+  state.docBaseUrl = doc.baseUrl || null;
   state.docText = doc.content || '';
   state.savedText = state.docText;
   state.dirty = false;

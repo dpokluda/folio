@@ -32,6 +32,14 @@ function builtinDocPath(file) {
   return path.join(__dirname, '..', 'samples', file);
 }
 
+// file:// URL of a document's containing folder, used by the renderer as the
+// base for resolving relative asset paths (e.g. ![](images/foo.png)). Returns
+// null for untitled/builtin documents that have no on-disk location.
+function docBaseUrl(filePath) {
+  if (!filePath) return null;
+  return pathToFileURL(path.dirname(filePath) + path.sep).href;
+}
+
 // Built-in documents shown from the Help menu. Opened as *untitled* so they are
 // viewable and editable, but Save becomes Save As and never overwrites the
 // bundled copy.
@@ -288,7 +296,7 @@ async function loadFile(filePath) {
     currentName = path.basename(filePath);
     store.addRecent(filePath);
     setDirty(false);
-    send('load-document', { path: filePath, content });
+    send('load-document', { path: filePath, content, baseUrl: docBaseUrl(filePath) });
     rebuildMenu();
     updateTitle();
   } catch (err) {
@@ -472,7 +480,7 @@ ipcMain.handle('get-init', () => {
       setDirty(false);
       rebuildMenu();
       updateTitle();
-      document = { path: target, content, name: currentName };
+      document = { path: target, content, name: currentName, baseUrl: docBaseUrl(target) };
     } catch (err) {
       dialog.showErrorBox('Folio — cannot open file', `${target}\n\n${err.message}`);
     }
