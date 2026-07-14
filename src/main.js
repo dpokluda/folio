@@ -192,6 +192,7 @@ function rebuildMenu() {
     appearance: store.get('appearance'),
     pageWidth: store.get('pageWidth'),
     recentFiles: store.get('recentFiles') || [],
+    hasFolder: !!currentFolder,
     actions,
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -205,6 +206,7 @@ function pushTheme() {
 const actions = {
   open: () => doOpen(),
   openFolder: () => doOpenFolder(),
+  closeFolder: () => doCloseFolder(),
   openRecent: (p) => loadFile(p),
   clearRecent: () => {
     store.clearRecent();
@@ -300,9 +302,14 @@ async function openExternalPath(filePath) {
 // Open a bundled document (welcome / formatting tour) as an untitled buffer, so
 // it can be read and edited but Save won't overwrite the shipped copy.
 async function openBuiltinDoc(key) {
+  if (!(await confirmDiscardIfDirty())) return;
+  loadBuiltinDoc(key);
+}
+
+// Load a bundled document without a dirty-check (caller's responsibility).
+function loadBuiltinDoc(key) {
   const doc = BUILTIN_DOCS[key];
   if (!doc) return;
-  if (!(await confirmDiscardIfDirty())) return;
   let content;
   try {
     content = fs.readFileSync(builtinDocPath(doc.file), 'utf8');
@@ -315,6 +322,18 @@ async function openBuiltinDoc(key) {
   setDirty(false);
   send('load-document', { path: null, content, name: doc.name });
   updateTitle();
+}
+
+// Close the open folder: clear the explorer, forget it, and return to Welcome.
+async function doCloseFolder() {
+  if (!currentFolder) return;
+  if (!(await confirmDiscardIfDirty())) return;
+  currentFolder = null;
+  store.set('folder', null);
+  store.set('filesVisible', false);
+  send('open-folder', null); // renderer hides + clears the explorer
+  loadBuiltinDoc('welcome');
+  rebuildMenu();
 }
 
 async function loadFile(filePath, anchor = null) {
@@ -359,6 +378,7 @@ function openFolder(dir, { openEntry } = {}) {
     const entry = entryDocFor(tree);
     if (entry) loadFile(entry);
   }
+  rebuildMenu();
 }
 
 async function doOpen() {

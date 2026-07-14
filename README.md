@@ -237,7 +237,8 @@ again.
   (falling back to `README.md`). If the current document has unsaved edits you're prompted to
   save or discard first. Toggle the explorer with `View ▸ Toggle File Explorer`
   (`Ctrl/Cmd+Shift+E`) or the **Files** button in the status bar; the last opened folder is
-  remembered between launches.
+  remembered between launches. Close the folder with `File ▸ Close Folder` (`Ctrl/Cmd+Shift+W`),
+  which hides the explorer and returns to the Welcome document.
 - **Toggle source mode** — `View ▸ Toggle Source Code Mode` (`Ctrl/Cmd+/`), or the
   **`</>` Source** button in the status bar. The themed CodeMirror editor appears; toggle
   back (the button reads **Exit Source**) to re-render the preview.
@@ -256,8 +257,9 @@ again.
   preview (highlighting every match, with next/previous), and in source mode it opens
   CodeMirror's search panel.
 - **Find in Files** — `Ctrl/Cmd+Shift+F` (needs an open folder) searches every Markdown file in
-  the folder. Results appear in the file-explorer pane grouped by file; click a match to open
-  that document with the term highlighted. Clear the search box to return to the file tree.
+  the folder. A search box appears at the top of the file-explorer pane; results are grouped by
+  file, and clicking a match opens that document with the term highlighted. Press `Esc` (or clear
+  the box) to dismiss the search and return to the file tree.
 
 ---
 

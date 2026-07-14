@@ -321,7 +321,7 @@ function setFolder(payload, show) {
     expandAncestorsOf(state.path);
   }
   $filesTitle.textContent = state.folder ? state.folder.name : 'Files';
-  clearFileSearch();
+  hideFileSearch();
   renderFileTree();
   if (show != null) setFilesVisible(show);
 }
@@ -416,6 +416,7 @@ let fileSearchTimer = null;
 
 function openFileSearch() {
   setFilesVisible(true);
+  $filesSearch.hidden = false;
   $filesSearch.focus();
   $filesSearch.select();
 }
@@ -446,6 +447,12 @@ function clearFileSearch() {
   clearTimeout(fileSearchTimer);
   if ($filesSearch) $filesSearch.value = '';
   showFileTree();
+}
+
+// Fully dismiss the Find-in-Files box: clear it, restore the tree, and hide it.
+function hideFileSearch() {
+  clearFileSearch();
+  if ($filesSearch) $filesSearch.hidden = true;
 }
 
 function renderFileResults(data) {
@@ -924,7 +931,8 @@ async function boot() {
   $filesSearch.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       e.preventDefault();
-      clearFileSearch();
+      hideFileSearch();
+      if (!state.sourceMode) $preview.focus?.();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       clearTimeout(fileSearchTimer);
@@ -935,7 +943,7 @@ async function boot() {
   // Wire main -> renderer events.
   window.folioAPI.onCommand((payload) => handleCommand(payload && payload.name));
   window.folioAPI.onLoadDocument((doc) => loadDocument(doc));
-  window.folioAPI.onOpenFolder((payload) => setFolder(payload, true));
+  window.folioAPI.onOpenFolder((payload) => setFolder(payload, !!payload));
   window.folioAPI.onSetTheme((themeFile) => applyTheme(themeFile));
   window.folioAPI.onSaved(() => markSaved());
   window.folioAPI.onDocumentPathChanged((info) => {

@@ -3,7 +3,7 @@ const path = require('path');
 
 // "fluent" -> "Fluent", "word" -> "Microsoft Word" — the Style family radio
 // group uses explicit labels below.
-function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, actions }) {
+function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, hasFolder, actions }) {
   const recentSubmenu =
     recentFiles && recentFiles.length
       ? [
@@ -61,6 +61,7 @@ function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, act
       { label: 'New', accelerator: 'CmdOrCtrl+N', click: () => actions.newFile() },
       { label: 'Open…', accelerator: 'CmdOrCtrl+O', click: () => actions.open() },
       { label: 'Open Folder…', accelerator: 'CmdOrCtrl+Shift+O', click: () => actions.openFolder() },
+      { label: 'Close Folder', accelerator: 'CmdOrCtrl+Shift+W', enabled: !!hasFolder, click: () => actions.closeFolder() },
       { label: 'Open Recent', submenu: recentSubmenu },
       { type: 'separator' },
       { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => actions.save() },
