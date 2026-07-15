@@ -4,6 +4,14 @@ const path = require('path');
 // "fluent" -> "Fluent", "word" -> "Microsoft Word" — the Style family radio
 // group uses explicit labels below.
 function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, hasFolder, hasFile, actions }) {
+  // macOS-only: install a `folio` shell wrapper into a PATH directory. The .app
+  // bundle isn't on PATH, so this mirrors VS Code's "Install 'code' command".
+  const shellCommandItems = isMac
+    ? [
+        { type: 'separator' },
+        { label: "Install 'folio' Command in PATH…", click: () => actions.installShellCommand() },
+      ]
+    : [];
   const recentSubmenu =
     recentFiles && recentFiles.length
       ? [
@@ -71,6 +79,7 @@ function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, has
       { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => actions.saveAs() },
       { type: 'separator' },
       { label: 'Export to PDF…', click: () => actions.exportPDF() },
+      ...shellCommandItems,
       { type: 'separator' },
       isMac ? { role: 'close' } : { role: 'quit', label: 'Quit' },
     ],

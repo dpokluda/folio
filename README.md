@@ -230,6 +230,45 @@ again.
 
   You can also drop a file onto the app (or `Folio.exe`), or double-click a file associated
   with Folio. When launched with no file, Folio shows the welcome document.
+
+  **The `folio` command on macOS** — a packaged macOS build installs as
+  `/Applications/Folio.app`, and a `.app` bundle is a folder rather than a plain
+  executable, so it isn't on your `PATH` by default (on Windows the installer already
+  puts `Folio` on `PATH`). To get a `folio` command in your terminal, use
+  `File ▸ Install 'folio' Command in PATH…`. This writes a small wrapper to
+  `/usr/local/bin/folio`, after which you can run:
+
+  ```sh
+  folio path/to/notes.md
+  ```
+
+  You may need to open a new terminal (and have `/usr/local/bin` on your `PATH`). If the
+  menu command reports it needs elevated permissions, it shows a copy-paste one-liner you
+  can run yourself:
+
+  ```sh
+  sudo mkdir -p /usr/local/bin && printf '#!/bin/sh\nexec open -a "Folio" "$@"\n' | sudo tee /usr/local/bin/folio >/dev/null && sudo chmod 0755 /usr/local/bin/folio
+  ```
+
+  With no setup at all, `open -a Folio path/to/notes.md` launches an installed Folio and
+  opens the file.
+
+  The wrapper works from any shell that has `/usr/local/bin` on its `PATH` — normally both
+  `zsh` and `bash`, and `pwsh` too when it's launched from your terminal. If you run
+  PowerShell as a *login* shell and `folio` isn't found, `/usr/local/bin` simply isn't on
+  its `PATH` (the same one-time setup pwsh needs for Homebrew and other CLI tools). Add this
+  line to your PowerShell **profile file** so it runs on every startup — open it with
+  `pwsh -c 'code $PROFILE'` (or edit `~/.config/powershell/Microsoft.PowerShell_profile.ps1`)
+  and add:
+
+  ```powershell
+  $env:PATH += ':/usr/local/bin'
+  ```
+
+  Then open a new PowerShell window (or run `. $PROFILE`) and check with `Get-Command folio`.
+  Note: typing that line at the `pwsh` prompt only changes the current session and is lost
+  when you close it — it has to live in the profile file to persist. This is PowerShell
+  syntax for the PowerShell profile; `zsh`/`bash` need nothing extra.
 - **Open a folder** — `File ▸ Open Folder…` (`Ctrl/Cmd+Shift+O`) opens a **file explorer**
   down the left side listing the Markdown files in that directory tree. Click a file to render
   it; the explorer highlights whatever's showing. Clicking a link from one document to another

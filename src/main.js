@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme, clipboard } = require('electron');
 const fs = require('fs');
 const path = require('path');
 const { pathToFileURL } = require('url');
@@ -328,6 +328,7 @@ const actions = {
     rebuildMenu();
   },
   about: () => showAbout(focusedSession()),
+  installShellCommand: () => installShellCommand(),
   openWelcome: () => withSession((s) => openBuiltinDoc(s, 'welcome')),
   openFormattingTour: () => withSession((s) => openBuiltinDoc(s, 'formatting-tour')),
 };
@@ -338,6 +339,88 @@ function withSession(fn) {
   let session = focusedSession();
   if (!session) session = createWindow();
   return fn(session);
+}
+
+// macOS: install a small `folio` wrapper into /usr/local/bin so the app can be
+// launched from the terminal (the .app bundle itself isn't on PATH). The wrapper
+// shells out to `open -a "Folio"`, which routes any file arg through the app's
+// existing `open-file` handling. Never crashes the app: everything is guarded.
+function installShellCommand() {
+  const session = focusedSession();
+  const parentWin = session ? session.win : null;
+
+  try {
+    if (process.platform !== 'darwin') {
+      dialog.showMessageBox(parentWin, {
+        type: 'info',
+        title: 'Install Command',
+        message: "Installing the 'folio' command isn't supported on this platform yet.",
+        detail:
+          'On Windows a packaged install already places Folio on your PATH, and Linux support is planned.',
+        buttons: ['OK'],
+      });
+      return;
+    }
+
+    const binDir = '/usr/local/bin';
+    const target = `${binDir}/folio`;
+    const script = '#!/bin/sh\nexec open -a "Folio" "$@"\n';
+    const manualCommand =
+      `sudo mkdir -p ${binDir} && ` +
+      `printf '#!/bin/sh\\nexec open -a "Folio" "$@"\\n' | sudo tee ${target} >/dev/null && ` +
+      `sudo chmod 0755 ${target}`;
+
+    try {
+      fs.mkdirSync(binDir, { recursive: true });
+      fs.writeFileSync(target, script, { mode: 0o755 });
+      fs.chmodSync(target, 0o755); // ensure mode even if the file pre-existed
+    } catch (err) {
+      if (err && (err.code === 'EACCES' || err.code === 'EPERM')) {
+        const response = dialog.showMessageBoxSync(parentWin, permissionDialogOptions(target, manualCommand));
+        if (response === 0) clipboard.writeText(manualCommand);
+        return;
+      }
+      throw err;
+    }
+
+    dialog.showMessageBox(parentWin, {
+      type: 'info',
+      title: 'Command Installed',
+      message: "The 'folio' command was installed.",
+      detail:
+        `You can now run:\n\n    folio path/to/file.md\n\n` +
+        `You may need to open a new terminal, and make sure ${binDir} is on your PATH.`,
+      buttons: ['OK'],
+    });
+  } catch (err) {
+    try {
+      dialog.showMessageBox(parentWin, {
+        type: 'error',
+        title: 'Install Command',
+        message: "Couldn't install the 'folio' command.",
+        detail: String((err && err.message) || err),
+        buttons: ['OK'],
+      });
+    } catch {
+      // Swallow: never let this crash the app.
+    }
+  }
+}
+
+// Dialog shown when /usr/local/bin/folio can't be written without elevation.
+// "Copy Command" (button 0) copies the sudo one-liner to the clipboard.
+function permissionDialogOptions(target, manualCommand) {
+  return {
+    type: 'warning',
+    title: 'Install Command',
+    message: "Installing the 'folio' command needs elevated permissions.",
+    detail:
+      `Folio couldn't write ${target} directly. Run this in a terminal to install it manually:\n\n` +
+      `${manualCommand}`,
+    buttons: ['Copy Command', 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+  };
 }
 
 function send(session, channel, payload) {
