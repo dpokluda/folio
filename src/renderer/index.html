@@ -10,6 +10,8 @@
 
     <!-- App chrome + CodeMirror compatibility layer (loaded first so the theme wins on shared selectors). -->
     <link rel="stylesheet" href="app.css" />
+    <!-- KaTeX math styling (self-hosted; fonts live in ./katex/fonts, copied at build time). -->
+    <link rel="stylesheet" href="katex/katex.min.css" />
     <!-- The active Typora-compatible theme is a stack of <link class="folio-theme">
          elements appended here at runtime (base + family + width overlays). -->
   </head>
@@ -56,17 +58,20 @@
           <!-- Browser-style hover hint: shows a link's target when the pointer
                is over it in the rendered preview. -->
           <div id="folio-link-hint" hidden aria-hidden="true"></div>
+
+          <!-- Transient toast for lightweight confirmations (e.g. "Path copied"). -->
+          <div id="folio-toast" hidden role="status" aria-live="polite"></div>
         </div>
 
         <!-- Status bar: mode toggles + live document stats. -->
         <footer id="folio-statusbar">
           <div class="folio-status-group">
             <button id="btn-files" class="folio-status-btn" type="button"
-              title="Toggle File Explorer (Ctrl/Cmd+Shift+E)">
+              title="Toggle File Explorer (Ctrl/Cmd+Alt+E)">
               <span class="folio-ico">&#128193;</span><span>Files</span>
             </button>
             <button id="btn-outline" class="folio-status-btn" type="button"
-              title="Toggle Outline (Ctrl/Cmd+Shift+K)">
+              title="Toggle Outline (Ctrl/Cmd+Alt+O)">
               <span class="folio-ico">&#9776;</span><span>Outline</span>
             </button>
             <button id="btn-source" class="folio-status-btn" type="button"

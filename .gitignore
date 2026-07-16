@@ -4,6 +4,7 @@ node_modules/
 # Build output
 src/renderer/bundle.js
 src/renderer/bundle.js.map
+src/renderer/katex/
 release/
 dist/
 

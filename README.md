@@ -40,6 +40,8 @@ the CSS themes I already use "just work."
   strikethrough, task lists, footnotes, autolinking, typographic replacements, and emoji.
 - **Syntax highlighting** of fenced code blocks with
   [highlight.js](https://highlightjs.org/).
+- **Math typesetting** with [KaTeX](https://katex.org/): inline `$…$` and display `$$…$$`
+  TeX formulas, rendered in the preview and included in PDF exports.
 - **Document outline** sidebar generated from headings.
 - **Folder mode / file explorer**, `File > Open Folder…` shows a browsable tree of the
   Markdown files in a directory. Click a file to render it; click a link between documents
@@ -275,20 +277,36 @@ again.
   follows it in place, and a link that points at a folder opens that folder's `_index.md`
   (falling back to `README.md`). If the current document has unsaved edits you're prompted to
   save or discard first. Toggle the explorer with `View > Toggle File Explorer`
-  (`Ctrl/Cmd+Shift+E`) or the **Files** button in the status bar; the last opened folder is
+  (`Ctrl/Cmd+Alt+E`) or the **Files** button in the status bar; the last opened folder is
   remembered between launches. Close the folder with `File > Close Folder` (`Ctrl/Cmd+Shift+W`),
   which hides the explorer and returns to the Welcome document.
 - **Toggle source mode**, `View > Toggle Source Code Mode` (`Ctrl/Cmd+/`), or the
   **`</>` Source** button in the status bar. The themed CodeMirror editor appears; toggle
   back (the button reads **Exit Source**) to re-render the preview.
+- **Line numbers**, `View > Show Line Numbers` toggles an optional gutter of line numbers in
+  the source editor. The choice is remembered between launches (off by default).
+- **Format**, the **Format** menu (and keyboard shortcuts) apply Markdown formatting in
+  **source mode**. With text selected the marks wrap the selection; with nothing selected
+  the marks are inserted with the caret between them. Pressing the same shortcut on already
+  formatted text (or a heading of the same level) toggles it back off.
+  - **Bold** `Ctrl/Cmd+B` · **Italic** `Ctrl/Cmd+I` · **Underline** `Ctrl/Cmd+U`
+    (inserts `<u>…</u>`) · **Strikethrough** `Ctrl/Cmd+Shift+X` · **Inline Code** `Ctrl/Cmd+E`
+    · **Code Block** `Ctrl/Cmd+Shift+E` · **Link** `Ctrl/Cmd+K`.
+  - **Inline Math** `Ctrl/Cmd+M` (wraps in `$…$`) · **Math Block** `Ctrl/Cmd+Shift+M`
+    (wraps in `$$…$$`). Math is rendered with [KaTeX](https://katex.org/) — write TeX between
+    `$…$` for inline formulas or `$$…$$` for display equations.
+  - **Headings** `Ctrl/Cmd+1` … `Ctrl/Cmd+6` set the current line(s) to that heading level.
 - **Switch themes**, the **Themes** menu offers three independent choices: a **Style**
   (Fluent, GitHub, Microsoft Word), an **Appearance** (Light, Dark) and a **Page width**
   (Dynamic, A4, US Letter). Both the preview and the source editor restyle instantly; your
   selection is remembered.
-- **Outline**, `View > Toggle Outline` (`Ctrl/Cmd+Shift+K`), or the **Outline** button in
+- **Outline**, `View > Toggle Outline` (`Ctrl/Cmd+Alt+O`), or the **Outline** button in
   the status bar, shows a headings sidebar.
 - **Save**, `Ctrl/Cmd+S` (Save As: `Ctrl/Cmd+Shift+S`). An unsaved document shows a `•` in
   the title bar and prompts before you close or open another file.
+- **Copy file path**, `File > Copy File Path` (`Ctrl/Cmd+Shift+C`) copies the open document's
+  full path to the clipboard (handy for sharing or pasting into a terminal). A short toast
+  confirms the copy.
 - **Export to PDF**, `File > Export to PDF…`. The page size follows the active **Page width**
   (A4 vs US Letter).
 - **Zoom**, `Ctrl/Cmd +` / `Ctrl/Cmd -` / `Ctrl/Cmd 0`.
@@ -397,5 +415,7 @@ build.js         esbuild bundler for the renderer
 - **[markdown-it](https://github.com/markdown-it/markdown-it)** and its plugins, Markdown
   rendering.
 - **[highlight.js](https://highlightjs.org/)**, fenced-code syntax highlighting.
+- **[KaTeX](https://katex.org/)**, math typesetting (via
+  [@vscode/markdown-it-katex](https://github.com/microsoft/vscode-markdown-it-katex)).
 - The **[Fluent](https://github.com/li3zhen1/Fluent-Typora)** theme, on which the bundled
   Fluent variants are based.

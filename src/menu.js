@@ -3,7 +3,7 @@ const path = require('path');
 
 // "fluent" -> "Fluent", "word" -> "Microsoft Word" — the Style family radio
 // group uses explicit labels below.
-function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, hasFolder, hasFile, actions }) {
+function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, hasFolder, hasFile, lineNumbers, actions }) {
   // macOS-only: install a `folio` shell wrapper into a PATH directory. The .app
   // bundle isn't on PATH, so this mirrors VS Code's "Install 'code' command".
   const shellCommandItems = isMac
@@ -78,6 +78,8 @@ function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, has
       { label: 'Save', accelerator: 'CmdOrCtrl+S', click: () => actions.save() },
       { label: 'Save As…', accelerator: 'CmdOrCtrl+Shift+S', click: () => actions.saveAs() },
       { type: 'separator' },
+      { label: 'Copy File Path', accelerator: 'CmdOrCtrl+Shift+C', enabled: !!hasFile, click: () => actions.copyPath() },
+      { type: 'separator' },
       { label: 'Export to PDF…', click: () => actions.exportPDF() },
       ...shellCommandItems,
       { type: 'separator' },
@@ -101,6 +103,50 @@ function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, has
     ],
   });
 
+  // The accelerators here are display-only (registerAccelerator: false): the
+  // actual keyboard handling lives in the CodeMirror editor so the shortcuts
+  // work uniformly and aren't swallowed by the browser's native Ctrl+B/I/U.
+  // Clicking a menu item still routes through actions.format for mouse users.
+  const fmt = (label, accel, kind) => ({
+    label,
+    accelerator: accel,
+    registerAccelerator: false,
+    click: () => actions.format(kind),
+  });
+  template.push({
+    label: 'Format',
+    submenu: [
+      fmt('Bold', 'CmdOrCtrl+B', 'bold'),
+      fmt('Italic', 'CmdOrCtrl+I', 'italic'),
+      fmt('Underline', 'CmdOrCtrl+U', 'underline'),
+      fmt('Strikethrough', 'CmdOrCtrl+Shift+X', 'strikethrough'),
+      fmt('Inline Code', 'CmdOrCtrl+E', 'code'),
+      fmt('Code Block', 'CmdOrCtrl+Shift+E', 'codeblock'),
+      fmt('Link', 'CmdOrCtrl+K', 'link'),
+      { type: 'separator' },
+      fmt('Inline Math', 'CmdOrCtrl+M', 'math'),
+      fmt('Math Block', 'CmdOrCtrl+Shift+M', 'mathblock'),
+      { type: 'separator' },
+      fmt('Heading 1', 'CmdOrCtrl+1', 'h1'),
+      fmt('Heading 2', 'CmdOrCtrl+2', 'h2'),
+      fmt('Heading 3', 'CmdOrCtrl+3', 'h3'),
+      fmt('Heading 4', 'CmdOrCtrl+4', 'h4'),
+      fmt('Heading 5', 'CmdOrCtrl+5', 'h5'),
+      fmt('Heading 6', 'CmdOrCtrl+6', 'h6'),
+    ],
+  });
+
+  // Chromium's Windows menu renderer prints Ctrl+Alt accelerators in a
+  // non-standard "Alt+Ctrl+…" order. For Ctrl+Alt items we therefore bake the
+  // correctly ordered text into the label (a `\t` right-aligns it like an
+  // accelerator) and let the renderer handle the keystroke, so Windows/Linux
+  // show the conventional "Ctrl+Alt+…". macOS renders glyphs correctly, so it
+  // keeps the native accelerator.
+  const ctrlAltItem = (label, letter, onClick) =>
+    isMac
+      ? { label, accelerator: `Cmd+Alt+${letter}`, click: onClick }
+      : { label: `${label}\tCtrl+Alt+${letter}`, click: onClick };
+
   template.push({
     label: 'View',
     submenu: [
@@ -109,15 +155,13 @@ function buildMenu({ isMac, styleFamily, appearance, pageWidth, recentFiles, has
         accelerator: 'CmdOrCtrl+/',
         click: () => actions.toggleSource(),
       },
+      ctrlAltItem('Toggle File Explorer', 'E', () => actions.toggleFiles()),
+      ctrlAltItem('Toggle Outline', 'O', () => actions.toggleOutline()),
       {
-        label: 'Toggle File Explorer',
-        accelerator: 'CmdOrCtrl+Shift+E',
-        click: () => actions.toggleFiles(),
-      },
-      {
-        label: 'Toggle Outline',
-        accelerator: 'CmdOrCtrl+Shift+K',
-        click: () => actions.toggleOutline(),
+        label: 'Show Line Numbers',
+        type: 'checkbox',
+        checked: !!lineNumbers,
+        click: () => actions.toggleLineNumbers(),
       },
       { type: 'separator' },
       { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: () => actions.zoomIn() },

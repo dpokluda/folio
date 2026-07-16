@@ -198,6 +198,17 @@ body {
   background: transparent;
   border: none;
 }
+/* Optional line numbers (View > Show Line Numbers): muted, following the theme's
+   text colour via currentColor so they read in both light and dark appearances. */
+#typora-source .cm-lineNumbers .cm-gutterElement {
+  color: currentColor;
+  opacity: 0.38;
+  padding: 0 8px 0 12px;
+}
+#typora-source .cm-activeLineGutter {
+  background: transparent;
+  opacity: 0.7;
+}
 /* Keep the active line subtle/transparent — matches the themes' grey-bar-free
    source mode where `.CodeMirror-activeline-background` is flattened. */
 #typora-source .cm-activeLine {
@@ -551,6 +562,45 @@ body {
   display: none;
 }
 
+/* --------------------------------------------------------------------------
+   Toast: a transient, centered confirmation pill near the bottom of the
+   preview (e.g. "Path copied to clipboard"). Non-interactive; fades in/out.
+   -------------------------------------------------------------------------- */
+#folio-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translate(-50%, 6px);
+  z-index: 30;
+  max-width: min(80%, 520px);
+  margin: 0;
+  padding: 7px 14px;
+  box-sizing: border-box;
+  background: #23252b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 7px;
+  color: #f2f3f5;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 12.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  opacity: 0;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+#folio-toast.folio-toast-show {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+#folio-toast[hidden] {
+  display: none;
+}
+
 /* ==========================================================================
    highlight.js token colours (GitHub-light palette).
 
@@ -666,6 +716,14 @@ body {
     background: #17181b;
     border-color: #2a2c30;
     color: #9aa0aa;
+  }
+
+  /* --- toast --- */
+  #folio-toast {
+    background: #303338;
+    border-color: rgba(255, 255, 255, 0.1);
+    color: #f2f3f5;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
   }
 
   /* --- in-preview find bar --- */

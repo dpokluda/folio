@@ -15,6 +15,7 @@ const DEFAULTS = {
   sourceMode: false,
   outlineVisible: false,
   filesVisible: false, // file-explorer (folder) pane visibility
+  lineNumbers: false, // optional source-editor gutter line numbers
   folder: null, // last opened root folder (absolute path) or null
   zoom: 0,
 };

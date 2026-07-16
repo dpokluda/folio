@@ -1,8 +1,8 @@
 <svg width="1024" height="1024" viewBox="0 0 1024 1024" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="bg" x1="160" y1="96" x2="864" y2="928" gradientUnits="userSpaceOnUse">
+    <linearGradient id="bg" x1="150" y1="80" x2="874" y2="944" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#EEF1F4"/>
+      <stop offset="1" stop-color="#E6EAEF"/>
     </linearGradient>
     <linearGradient id="caret" x1="0" y1="332" x2="0" y2="692" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#2DD4BF"/>
@@ -10,12 +10,14 @@
     </linearGradient>
   </defs>
 
-  <!-- rounded-square app tile with subtle border for light backgrounds -->
-  <rect x="96" y="96" width="832" height="832" rx="216" fill="url(#bg)"/>
-  <rect x="97.5" y="97.5" width="829" height="829" rx="214.5" fill="none" stroke="#D3D9DF" stroke-width="3"/>
+  <!-- rounded-square app tile, enlarged to use more of the canvas -->
+  <rect x="72" y="72" width="880" height="880" rx="200" fill="url(#bg)"/>
+  <!-- darker, thick frame so the near-white tile stays visible on white
+       backgrounds and survives downscaling to 16/32/48px favicons -->
+  <rect x="85" y="85" width="854" height="854" rx="187" fill="none" stroke="#808A96" stroke-width="26"/>
 
   <!-- glyph (F + editor caret), enlarged to fill more of the tile -->
-  <g transform="translate(523 512) scale(1.26) translate(-523 -512)">
+  <g transform="translate(523 512) scale(1.45) translate(-523 -512)">
     <!-- stylized F -->
     <g fill="#2D333B">
       <!-- vertical stem -->

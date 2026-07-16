@@ -265,6 +265,7 @@ function rebuildMenu() {
     recentFiles: store.get('recentFiles') || [],
     hasFolder: !!(session && session.currentFolder),
     hasFile: !!(session && session.currentPath),
+    lineNumbers: !!store.get('lineNumbers'),
     actions,
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -288,12 +289,15 @@ const actions = {
   },
   save: () => withSession((s) => doSave(s)),
   saveAs: () => withSession((s) => doSaveAs(s)),
+  copyPath: () => copyDocumentPath(),
+  format: (kind) => sendFocused('command', { name: 'format', format: kind }),
   reload: () => withSession((s) => doReload(s)),
   exportPDF: () => withSession((s) => doExportPDF(s)),
   newFile: () => withSession((s) => doNew(s)),
   toggleSource: () => sendFocused('command', { name: 'toggle-source' }),
   toggleOutline: () => sendFocused('command', { name: 'toggle-outline' }),
   toggleFiles: () => sendFocused('command', { name: 'toggle-files' }),
+  toggleLineNumbers: () => sendFocused('command', { name: 'toggle-line-numbers' }),
   zoomIn: () => sendFocused('command', { name: 'zoom-in' }),
   zoomOut: () => sendFocused('command', { name: 'zoom-out' }),
   zoomReset: () => sendFocused('command', { name: 'zoom-reset' }),
@@ -339,6 +343,20 @@ function withSession(fn) {
   let session = focusedSession();
   if (!session) session = createWindow();
   return fn(session);
+}
+
+// Copy the focused document's absolute path to the clipboard (for sharing,
+// pasting into a terminal, etc.) and flash a short confirmation toast. No-op
+// with a gentle hint when the document is untitled (never saved to disk).
+function copyDocumentPath() {
+  const session = focusedSession();
+  if (!session) return;
+  if (!session.currentPath) {
+    send(session, 'command', { name: 'toast', text: 'Save the document first to copy its path' });
+    return;
+  }
+  clipboard.writeText(session.currentPath);
+  send(session, 'command', { name: 'toast', text: 'Path copied to clipboard' });
 }
 
 // macOS: install a small `folio` wrapper into /usr/local/bin so the app can be
@@ -918,6 +936,7 @@ ipcMain.handle('get-init', (event) => {
       // appears when Folio was launched pointing at a folder.
       outlineVisible: false,
       filesVisible,
+      lineNumbers: store.get('lineNumbers'),
       zoom: store.get('zoom'),
     },
     folder,
@@ -934,6 +953,10 @@ ipcMain.on('state-changed', (_e, state) => {
   if (typeof state.sourceMode === 'boolean') store.set('sourceMode', state.sourceMode);
   if (typeof state.outlineVisible === 'boolean') store.set('outlineVisible', state.outlineVisible);
   if (typeof state.filesVisible === 'boolean') store.set('filesVisible', state.filesVisible);
+  if (typeof state.lineNumbers === 'boolean') {
+    store.set('lineNumbers', state.lineNumbers);
+    rebuildMenu(); // keep the View > Show Line Numbers checkbox in sync
+  }
   if (typeof state.zoom === 'number') store.set('zoom', state.zoom);
 });
 

@@ -5,11 +5,12 @@ import MarkdownIt from 'markdown-it';
 import taskLists from 'markdown-it-task-lists';
 import footnote from 'markdown-it-footnote';
 import { full as emojiPlugin } from 'markdown-it-emoji';
+import katexPlugin from '@vscode/markdown-it-katex';
 import hljs from 'highlight.js';
 import DOMPurify from 'dompurify';
 
-import { EditorState, Compartment } from '@codemirror/state';
-import { EditorView, keymap, highlightSpecialChars, drawSelection } from '@codemirror/view';
+import { EditorState, EditorSelection, Compartment, Prec } from '@codemirror/state';
+import { EditorView, keymap, highlightSpecialChars, drawSelection, lineNumbers } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands';
 import { bracketMatching, syntaxHighlighting, defaultHighlightStyle } from '@codemirror/language';
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown';
@@ -42,7 +43,11 @@ const md = new MarkdownIt({
 })
   .use(taskLists, { enabled: true })
   .use(footnote)
-  .use(emojiPlugin);
+  .use(emojiPlugin)
+  // TeX math: `$...$` inline and `$$...$$` display, rendered to HTML+MathML by
+  // KaTeX. throwOnError:false shows the offending source in red instead of
+  // aborting the whole render on a typo.
+  .use(katexPlugin, { throwOnError: false });
 
 // ---------------------------------------------------------------------------
 // State
@@ -62,6 +67,7 @@ const state = {
   tree: [], // file-explorer tree nodes
   expanded: new Set(), // paths of expanded dirs
   filesVisible: false,
+  lineNumbers: false, // optional gutter line numbers in the source editor
   pendingAnchor: null, // heading to scroll to after the next preview render
   find: { open: false, query: '', matches: [], index: -1 }, // in-preview find
   pendingFindQuery: '', // term to auto-highlight after a Find-in-Files navigation
@@ -69,6 +75,7 @@ const state = {
 
 let editor = null;
 const editableCompartment = new Compartment();
+const lineNumbersCompartment = new Compartment();
 
 // DOM
 const $write = document.getElementById('write');
@@ -93,6 +100,7 @@ const $findPrev = document.getElementById('folio-find-prev');
 const $findNext = document.getElementById('folio-find-next');
 const $findClose = document.getElementById('folio-find-close');
 const $linkHint = document.getElementById('folio-link-hint');
+const $toast = document.getElementById('folio-toast');
 
 // ---------------------------------------------------------------------------
 // CodeMirror editor
@@ -112,12 +120,18 @@ function createEditor(initialText) {
       history(),
       drawSelection(),
       highlightSpecialChars(),
+      // Optional gutter line numbers (View > Show Line Numbers). Held in a
+      // compartment so the toggle reconfigures without rebuilding the editor.
+      lineNumbersCompartment.of(state.lineNumbers ? lineNumbers() : []),
       bracketMatching(),
       highlightSelectionMatches(),
       search({ top: true }),
       EditorView.lineWrapping,
       syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
       markdown({ base: markdownLanguage, codeLanguages: [] }),
+      // Formatting shortcuts win over CodeMirror defaults and the browser's own
+      // Ctrl+B/I/U editing commands, so they behave consistently in the editor.
+      Prec.highest(keymap.of(formattingKeymap)),
       keymap.of([indentWithTab, ...defaultKeymap, ...historyKeymap, ...searchKeymap]),
       // Legacy compat class so themes' `#typora-source .CodeMirror` rules apply.
       EditorView.editorAttributes.of({ class: 'CodeMirror' }),
@@ -135,6 +149,176 @@ function setEditorText(text) {
     changes: { from: 0, to: editor.state.doc.length, insert: text },
   });
 }
+
+// ---------------------------------------------------------------------------
+// Markdown formatting commands (source-mode editor)
+// ---------------------------------------------------------------------------
+// Drive the Format menu / keyboard shortcuts. Formatting edits markdown text,
+// so these only act while the CodeMirror source editor is active; in the
+// read-only rendered preview they no-op (with a hint the first time).
+
+// Inline markers for the wrap-style commands. Underline has no native markdown,
+// so — like Typora — it falls back to inline <u></u> HTML.
+const INLINE_FORMATS = {
+  bold: ['**', '**'],
+  italic: ['*', '*'],
+  underline: ['<u>', '</u>'],
+  strikethrough: ['~~', '~~'],
+  code: ['`', '`'],
+  math: ['$', '$'], // inline TeX math
+};
+
+function applyFormat(kind) {
+  if (!state.sourceMode || !editor) {
+    showToast('Switch to Source mode (Ctrl/Cmd+/) to format text');
+    return;
+  }
+  if (INLINE_FORMATS[kind]) {
+    toggleWrap(editor, INLINE_FORMATS[kind][0], INLINE_FORMATS[kind][1]);
+  } else if (kind === 'link') {
+    insertLink(editor);
+  } else if (kind === 'codeblock') {
+    insertFencedBlock(editor, '```', '```');
+  } else if (kind === 'mathblock') {
+    insertFencedBlock(editor, '$$', '$$');
+  } else if (/^h[1-6]$/.test(kind)) {
+    setHeading(editor, Number(kind.slice(1)));
+  }
+  editor.focus();
+}
+
+// Wrap each selection in `before`/`after`, or drop empty markers with the caret
+// between them when nothing is selected. Toggles: if the selection is already
+// wrapped (markers just outside, or included inside the selection), unwrap it.
+function toggleWrap(view, before, after) {
+  const bLen = before.length;
+  const aLen = after.length;
+  const docLen = view.state.doc.length;
+  view.dispatch(
+    view.state.changeByRange((range) => {
+      const { from, to } = range;
+      const selected = view.state.sliceDoc(from, to);
+      const outerBefore = view.state.sliceDoc(Math.max(0, from - bLen), from);
+      const outerAfter = view.state.sliceDoc(to, Math.min(docLen, to + aLen));
+
+      // Markers sit just outside the selection -> unwrap.
+      if (from !== to && outerBefore === before && outerAfter === after) {
+        return {
+          changes: [
+            { from: from - bLen, to: from, insert: '' },
+            { from: to, to: to + aLen, insert: '' },
+          ],
+          range: EditorSelection.range(from - bLen, to - bLen),
+        };
+      }
+      // Markers are inside the selection -> unwrap.
+      if (selected.length >= bLen + aLen && selected.startsWith(before) && selected.endsWith(after)) {
+        const inner = selected.slice(bLen, selected.length - aLen);
+        return {
+          changes: { from, to, insert: inner },
+          range: EditorSelection.range(from, from + inner.length),
+        };
+      }
+      // Otherwise wrap.
+      return {
+        changes: [
+          { from, insert: before },
+          { from: to, insert: after },
+        ],
+        range:
+          from === to
+            ? EditorSelection.cursor(from + bLen)
+            : EditorSelection.range(from + bLen, to + bLen),
+      };
+    })
+  );
+  return true;
+}
+
+// Set (or toggle off) the ATX heading level of every line the selection touches.
+// Pressing the level a line already has strips the heading.
+function setHeading(view, level) {
+  const doc = view.state.doc;
+  const lineNums = new Set();
+  for (const range of view.state.selection.ranges) {
+    const start = doc.lineAt(range.from).number;
+    const end = doc.lineAt(range.to).number;
+    for (let n = start; n <= end; n++) lineNums.add(n);
+  }
+  const changes = [];
+  for (const n of lineNums) {
+    const line = doc.line(n);
+    const m = /^(#{1,6})[ \t]+/.exec(line.text);
+    const currentLevel = m ? m[1].length : 0;
+    const prefixLen = m ? m[0].length : 0;
+    const newPrefix = currentLevel === level ? '' : '#'.repeat(level) + ' ';
+    changes.push({ from: line.from, to: line.from + prefixLen, insert: newPrefix });
+  }
+  view.dispatch({ changes, scrollIntoView: true });
+  return true;
+}
+
+// Insert a markdown link. With a selection: `[selected]()` with the caret in the
+// URL parens. Without one: `[]()` with the caret in the link-text brackets.
+function insertLink(view) {
+  view.dispatch(
+    view.state.changeByRange((range) => {
+      const { from, to } = range;
+      if (from === to) {
+        return { changes: { from, insert: '[]()' }, range: EditorSelection.cursor(from + 1) };
+      }
+      const selected = view.state.sliceDoc(from, to);
+      return {
+        changes: { from, to, insert: `[${selected}]()` },
+        range: EditorSelection.cursor(from + selected.length + 3),
+      };
+    })
+  );
+  return true;
+}
+
+// Insert a fenced block (code ``` ``` ``` ``` or math `$$`) on its own lines.
+// With a selection the selected text becomes the block body; with none, an empty
+// body line is created with the caret on it. A leading newline is added when the
+// caret isn't already at the start of a line so the fence isn't glued to text.
+function insertFencedBlock(view, open, close) {
+  view.dispatch(
+    view.state.changeByRange((range) => {
+      const { from, to } = range;
+      const body = view.state.sliceDoc(from, to);
+      const lead = from === view.state.doc.lineAt(from).from ? '' : '\n';
+      const insert = `${lead}${open}\n${body}\n${close}`;
+      const bodyStart = from + lead.length + open.length + 1;
+      return {
+        changes: { from, to, insert },
+        range: EditorSelection.range(bodyStart, bodyStart + body.length),
+      };
+    })
+  );
+  return true;
+}
+
+// CodeMirror keybindings for the formatting commands. These are the real
+// keyboard handlers (the Format menu accelerators are display-only, via
+// registerAccelerator:false, so they don't swallow the keys). Each returns true
+// so CodeMirror stops the event, preventing the browser's native Ctrl+B/I/U.
+const formattingKeymap = [
+  { key: 'Mod-b', run: (v) => toggleWrap(v, '**', '**') },
+  { key: 'Mod-i', run: (v) => toggleWrap(v, '*', '*') },
+  { key: 'Mod-u', run: (v) => toggleWrap(v, '<u>', '</u>') },
+  { key: 'Mod-Shift-x', run: (v) => toggleWrap(v, '~~', '~~') },
+  { key: 'Mod-e', run: (v) => toggleWrap(v, '`', '`') },
+  { key: 'Mod-Shift-e', run: (v) => insertFencedBlock(v, '```', '```') },
+  { key: 'Mod-m', run: (v) => toggleWrap(v, '$', '$') },
+  { key: 'Mod-Shift-m', run: (v) => insertFencedBlock(v, '$$', '$$') },
+  { key: 'Mod-k', run: (v) => insertLink(v) },
+  { key: 'Mod-1', run: (v) => setHeading(v, 1) },
+  { key: 'Mod-2', run: (v) => setHeading(v, 2) },
+  { key: 'Mod-3', run: (v) => setHeading(v, 3) },
+  { key: 'Mod-4', run: (v) => setHeading(v, 4) },
+  { key: 'Mod-5', run: (v) => setHeading(v, 5) },
+  { key: 'Mod-6', run: (v) => setHeading(v, 6) },
+];
 
 // ---------------------------------------------------------------------------
 // Rendering / preview
@@ -675,6 +859,18 @@ function setOutlineVisible(on) {
   persistState();
 }
 
+// Toggle the source editor's gutter line numbers. The setting persists and, when
+// the editor already exists, is applied live by reconfiguring its compartment.
+function setLineNumbers(on) {
+  state.lineNumbers = on;
+  if (editor) {
+    editor.dispatch({
+      effects: lineNumbersCompartment.reconfigure(on ? lineNumbers() : []),
+    });
+  }
+  persistState();
+}
+
 // ---------------------------------------------------------------------------
 // Find in preview (rendered mode)
 // ---------------------------------------------------------------------------
@@ -904,6 +1100,7 @@ function persistState() {
     sourceMode: state.sourceMode,
     outlineVisible: state.outlineVisible,
     filesVisible: state.filesVisible,
+    lineNumbers: state.lineNumbers,
     zoom: state.zoom,
   });
 }
@@ -911,7 +1108,8 @@ function persistState() {
 // ---------------------------------------------------------------------------
 // Commands from the native menu
 // ---------------------------------------------------------------------------
-function handleCommand(name) {
+function handleCommand(payload) {
+  const name = payload && payload.name;
   switch (name) {
     case 'toggle-source':
       setSourceMode(!state.sourceMode);
@@ -921,6 +1119,9 @@ function handleCommand(name) {
       break;
     case 'toggle-files':
       setFilesVisible(!state.filesVisible);
+      break;
+    case 'toggle-line-numbers':
+      setLineNumbers(!state.lineNumbers);
       break;
     case 'zoom-in':
       zoom(1);
@@ -941,9 +1142,39 @@ function handleCommand(name) {
     case 'find-in-files':
       openFileSearch();
       break;
+    case 'format':
+      applyFormat(payload && payload.format);
+      break;
+    case 'toast':
+      showToast(payload && payload.text);
+      break;
     default:
       break;
   }
+}
+
+// ---------------------------------------------------------------------------
+// Transient toast (bottom-center). Used for lightweight confirmations such as
+// "Path copied to clipboard".
+// ---------------------------------------------------------------------------
+let toastHideTimer = null;
+let toastClearTimer = null;
+function showToast(text) {
+  if (!text || !$toast) return;
+  clearTimeout(toastHideTimer);
+  clearTimeout(toastClearTimer);
+  $toast.textContent = text;
+  $toast.hidden = false;
+  // Restart the fade-in transition even on rapid repeats.
+  $toast.classList.remove('folio-toast-show');
+  void $toast.offsetWidth;
+  $toast.classList.add('folio-toast-show');
+  toastHideTimer = setTimeout(() => {
+    $toast.classList.remove('folio-toast-show');
+    toastClearTimer = setTimeout(() => {
+      $toast.hidden = true;
+    }, 220);
+  }, 1600);
 }
 
 // ---------------------------------------------------------------------------
@@ -974,6 +1205,8 @@ async function boot() {
   state.zoom = typeof s.zoom === 'number' ? s.zoom : 0;
   applyZoom();
   setOutlineVisible(!!s.outlineVisible);
+  // Restore the line-numbers preference before the editor is lazily created.
+  state.lineNumbers = !!s.lineNumbers;
 
   // Restore a previously opened folder (explorer tree) before loading the doc,
   // so the initial document highlights correctly. Visibility follows the stored
@@ -1033,9 +1266,25 @@ async function boot() {
   });
 
   // Wire main -> renderer events.
-  window.folioAPI.onCommand((payload) => handleCommand(payload && payload.name));
+  window.folioAPI.onCommand((payload) => handleCommand(payload));
   window.folioAPI.onLoadDocument((doc) => loadDocument(doc));
   window.folioAPI.onOpenFolder((payload) => setFolder(payload, !!payload));
+  // On Windows/Linux the View > Toggle File Explorer/Outline menu items carry a
+  // baked-in "Ctrl+Alt+…" label instead of a native accelerator (see menu.js),
+  // so handle those keystrokes here. macOS keeps the native accelerator.
+  if (!/Mac/i.test(navigator.platform || navigator.userAgent || '')) {
+    window.addEventListener('keydown', (e) => {
+      if (!e.ctrlKey || !e.altKey || e.shiftKey || e.metaKey) return;
+      const code = e.code;
+      if (code === 'KeyE') {
+        e.preventDefault();
+        setFilesVisible(!state.filesVisible);
+      } else if (code === 'KeyO') {
+        e.preventDefault();
+        setOutlineVisible(!state.outlineVisible);
+      }
+    });
+  }
   window.folioAPI.onSetTheme((themeFile) => applyTheme(themeFile));
   window.folioAPI.onSaved(() => markSaved());
   window.folioAPI.onDocumentPathChanged((info) => {
