@@ -11,7 +11,7 @@ dist/
 # Aptos fonts are Microsoft Office cloud fonts — do NOT redistribute in a public repo.
 # Users must supply their own (from an Office install) or the Word themes fall back
 # to Segoe UI / Inter. See README "Themes" section.
-themes/microsoft-word/fonts/*.ttf
+themes/word/fonts/*.ttf
 
 # OS / editor cruft
 .DS_Store

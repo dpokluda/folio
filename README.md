@@ -334,17 +334,27 @@ active look:
 That's 3 × 2 × 3 = 18 combinations from a handful of small stylesheets, rather than 18
 separate theme files. Your selection is remembered between launches.
 
-**How it's composed.** Folio ships a `themes/` folder and builds each look at runtime by
-layering a few stylesheets, a base foundation, a **Style** overlay, then a **Page-width**
-overlay, mounted as `<link class="folio-theme">` elements (later layers win):
+**How it's composed.** Folio ships a `themes/` folder laid out symmetrically — a shared
+`base.css` foundation plus one folder per **Style** family, each holding its family overlay
+(if any) and its three **Page-width** overlays. A look is built at runtime by layering these
+as `<link class="folio-theme">` elements (later layers win):
 
-| File                                   | Role                                                        |
-| -------------------------------------- | ----------------------------------------------------------- |
-| `fluent.css`                           | Base foundation (structure + the Fluent palette)            |
-| `github.css`                           | GitHub (Primer) **Style** overlay                           |
-| `microsoft-word/word-type.css`         | Microsoft Word (Aptos) **Style** overlay                    |
-| `fluent-a4.css` / `-us-letter` / `-dynamic` | **Page-width** overlays for Fluent & GitHub            |
-| `microsoft-word/word-page-*.css`       | **Page-width** overlays for Microsoft Word                  |
+```
+themes/
+  base.css                     shared foundation (also the Fluent palette)
+  fluent/  dynamic.css  a4.css  us-letter.css
+  github/  github.css  dynamic.css  a4.css  us-letter.css
+  word/    word.css    dynamic.css  a4.css  us-letter.css  fonts/
+```
+
+| Selection | Layers loaded (in order) |
+| --------- | ------------------------ |
+| Fluent    | `base.css` → `fluent/<width>.css` |
+| GitHub    | `base.css` → `github/github.css` → `github/<width>.css` |
+| Word      | `base.css` → `word/word.css` → `word/<width>.css` |
+
+Fluent needs no family overlay because `base.css` already carries the Fluent palette; GitHub
+and Word add a thin overlay that overrides the palette and typography.
 
 **Appearance** is not a file swap: Folio flips Chromium's `prefers-color-scheme` via
 Electron's `nativeTheme`, so every layer's `@media (prefers-color-scheme: dark)` block (and
@@ -354,19 +364,21 @@ Folio's own chrome + syntax colours) switches to its dark palette together.
 
 Folio honors the Typora DOM contract (`#write`, `#typora-source .CodeMirror`,
 `typora-sourceview-on`), so most Typora themes work unchanged. To add one as a new **Style**,
-drop its `.css` (and any asset subfolder) into `themes/`, then register it as a family in
-`src/main.js` (`familyLayers` / the `STYLE_FAMILIES` list) and add a radio entry in
-`src/menu.js`. Giving the theme `@media (prefers-color-scheme: dark)` variables makes it
-Dark-aware automatically.
+create a `themes/<family>/` folder with the theme's `.css` (and any asset subfolder), then
+register it in `src/main.js` (`familyLayers` / the `STYLE_FAMILIES` list) and add a radio
+entry in `src/menu.js`. A self-contained Typora theme can be used as its own base — just
+return `['<family>/<family>.css']` from `familyLayers` and supply matching `<width>.css`
+overlays (or reuse Fluent's). Giving the theme `@media (prefers-color-scheme: dark)` variables
+makes it Dark-aware automatically.
 
 ### ⚠️ A note about the Aptos fonts (Microsoft Word themes)
 
 The Microsoft Word themes reference **Aptos** fonts. The `.ttf` files are **Microsoft Office
 "cloud fonts"** and are **not redistributed** in this repository, they're excluded via
-`.gitignore` (`themes/microsoft-word/fonts/*.ttf`).
+`.gitignore` (`themes/word/fonts/*.ttf`).
 
 To get the full Word look, supply your own Aptos fonts by copying these files into
-`themes/microsoft-word/fonts/`:
+`themes/word/fonts/`:
 
 ```
 Aptos-Regular.ttf        Aptos-Bold.ttf
@@ -397,7 +409,7 @@ src/
     index.html   #write (preview) + #typora-source (editor) + file explorer shells
     renderer.js  markdown-it render + CodeMirror 6 + theme swapping (bundled by esbuild)
     app.css      app chrome + CodeMirror→Typora compat + highlight.js token colors
-themes/          Typora-compatible themes (top-level .css files are selectable)
+themes/          Typora-compatible themes: base.css + per-family folders (fluent/ github/ word/)
 samples/         welcome.md demo document
 build.js         esbuild bundler for the renderer
 ```

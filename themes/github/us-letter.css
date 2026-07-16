@@ -1,16 +1,18 @@
 /* ==========================================================================
-   Fluent A4  —  fixed "printed page" width (A4)
+   GitHub US Letter  —  fixed "printed page" width (US Letter)
    --------------------------------------------------------------------------
-   Builds on the base Fluent theme and constrains the writing column to an
-   A4-sized sheet (210mm ≈ 794px @96dpi), rendered as a white page floating
-   on a soft grey backdrop — similar to a Word print view.
+   Builds on base.css + the GitHub overlay and constrains the writing column to a
+   US-Letter-sized sheet (8.5in ≈ 816px @96dpi), rendered as a white page
+   floating on a soft grey backdrop — similar to a Word print view.
 
-   Width overlay: Folio loads the base `fluent.css` separately (as its own
+   Width overlay: Folio loads the base `base.css` separately (as its own
    <link>) and then this partial on top, so no @import is needed here — this
-   file only sets the A4 page geometry, the sheet look and the compact type.
+   file only sets the US-Letter page geometry, the sheet look and the type.
    ========================================================================== */
 
 /* --- backdrop behind the page ------------------------------------------- */
+/* Typora paints the editor viewport with --bg-color; tint it grey so the
+   white sheet stands out. (Dark mode keeps Fluent's own dark background.)  */
 :root {
     --bg-color: #eceef1;
 }
@@ -53,9 +55,9 @@ html {
 
 /* --- the page / sheet ---------------------------------------------------- */
 #write {
-    max-width: 794px;                 /* A4 width @96dpi (210mm)             */
-    margin: 28px auto 72px;
-    padding: 76px 82px 110px;
+    max-width: 816px;                 /* US Letter width @96dpi (8.5in)      */
+    margin: 28px auto 72px;           /* float the sheet with breathing room */
+    padding: 76px 82px 110px;         /* ~0.8in side margins, like a page    */
     background: #ffffff;
     border-radius: 2px;
     box-shadow:
@@ -63,12 +65,13 @@ html {
         0 10px 28px rgba(0, 0, 0, 0.10);
 }
 
-/* Lock the width regardless of window size */
+/* Lock the width regardless of window size (base Fluent widens on big
+   windows via these breakpoints — pin them back to the page width).        */
 @media only screen and (min-width: 1400px) {
-    #write { max-width: 794px; }
+    #write { max-width: 816px; }
 }
 @media only screen and (min-width: 1800px) {
-    #write { max-width: 794px; }
+    #write { max-width: 816px; }
 }
 
 /* Source-code (raw markdown) mode: plain full-width editor — no page look.
@@ -78,9 +81,6 @@ html {
 }
 
 /* --- dark appearance ----------------------------------------------------- */
-/* Folio flips prefers-color-scheme via Electron's nativeTheme when the user
-   picks Appearance ▸ Dark. Base Fluent already swaps its palette dark; here
-   we only need to darken the grey backdrop and the white paper sheet.        */
 @media (prefers-color-scheme: dark) {
     :root { --bg-color: #0a0b0d; }
     #write {

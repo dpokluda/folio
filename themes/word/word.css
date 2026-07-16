@@ -1,13 +1,13 @@
 /* ==========================================================================
-   microsoft-word/word-type.css  —  Microsoft Word (Aptos) typography layer
+   word/word.css  —  Microsoft Word (Aptos) typography layer
    --------------------------------------------------------------------------
-   Shared building block. NOT a selectable theme on its own — it lives in the
-   microsoft-word subfolder and is @import-ed by the microsoft-word-* theme files.
+   Family overlay for the Word Style. Loaded as a <link> on top of base.css
+   (not via @import), then a word/*.css page-width overlay on top of it.
 
    Defines fonts, heading styles, colours, body spacing and the white "sheet"
    look. Text is monochrome (black / grey / white); code syntax highlighting
    and emoji deliberately keep their colour. Page width / margins are set
-   separately by the word-page-*.css files.
+   separately by the word/{dynamic,a4,us-letter}.css files.
 
    The Aptos font files live beside this file in ./fonts.
    ========================================================================== */

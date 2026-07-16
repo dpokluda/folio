@@ -102,42 +102,43 @@ function appIconPath() {
 // Three-axis theming: Style family × Appearance × Page width.
 //
 // A selection is composed at runtime into an ordered stack of theme
-// stylesheets (base foundation → family overlay → width overlay). Appearance
-// (light/dark) is handled separately by flipping Chromium's prefers-color-
-// scheme through Electron's nativeTheme, which activates the dark palettes the
-// theme stylesheets already carry behind @media (prefers-color-scheme: dark).
+// stylesheets, layered base foundation → family overlay → width overlay (later
+// files override earlier ones). The `themes/` folder is laid out symmetrically:
+//
+//   themes/
+//     base.css              shared foundation (also the Fluent look)
+//     fluent/  a4.css  dynamic.css  us-letter.css
+//     github/  github.css  a4.css  dynamic.css  us-letter.css
+//     word/    word.css    a4.css  dynamic.css  us-letter.css  fonts/
+//
+// Fluent adds no family overlay — base.css already carries the Fluent palette —
+// so its folder holds only the page-width overlays. Appearance (light/dark) is
+// handled separately by flipping Chromium's prefers-color-scheme through
+// Electron's nativeTheme, which activates the dark palettes the stylesheets
+// already carry behind @media (prefers-color-scheme: dark).
 // ---------------------------------------------------------------------------
 const STYLE_FAMILIES = ['fluent', 'github', 'word'];
 const APPEARANCES = ['light', 'dark'];
 const PAGE_WIDTHS = ['dynamic', 'a4', 'letter'];
 
+// Family look overlays on top of base.css. Fluent needs none (base is Fluent).
 function familyLayers(family) {
   switch (family) {
     case 'github':
-      return ['fluent.css', 'github.css'];
+      return ['base.css', 'github/github.css'];
     case 'word':
-      return ['fluent.css', 'microsoft-word/word-type.css'];
+      return ['base.css', 'word/word.css'];
     case 'fluent':
     default:
-      return ['fluent.css'];
+      return ['base.css'];
   }
 }
 
+// Per-family page-width overlay, e.g. 'github/a4.css'. Every family folder
+// carries its own dynamic/a4/us-letter files, so the path is uniform.
 function widthLayer(family, width) {
-  if (family === 'word') {
-    const map = {
-      a4: 'microsoft-word/word-page-a4.css',
-      letter: 'microsoft-word/word-page-letter.css',
-      dynamic: 'microsoft-word/word-page-dynamic.css',
-    };
-    return map[width] || map.dynamic;
-  }
-  const map = {
-    a4: 'fluent-a4.css',
-    letter: 'fluent-us-letter.css',
-    dynamic: 'fluent-dynamic.css',
-  };
-  return map[width] || map.dynamic;
+  const name = { a4: 'a4.css', letter: 'us-letter.css', dynamic: 'dynamic.css' };
+  return `${family}/${name[width] || name.dynamic}`;
 }
 
 // Ordered list of theme CSS files (relative to themesDir) for the current

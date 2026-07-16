@@ -5,7 +5,7 @@
    US-Letter-sized sheet (8.5in ≈ 816px @96dpi), rendered as a white page
    floating on a soft grey backdrop — similar to a Word print view.
 
-   Width overlay: Folio loads the base `fluent.css` separately (as its own
+   Width overlay: Folio loads the base `base.css` separately (as its own
    <link>) and then this partial on top, so no @import is needed here — this
    file only sets the US-Letter page geometry, the sheet look and the type.
    ========================================================================== */

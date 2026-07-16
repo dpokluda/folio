@@ -1,3 +1,14 @@
+/* ==========================================================================
+   base.css  —  shared foundation for every built-in theme
+   --------------------------------------------------------------------------
+   Loaded first for all Style families (Fluent / GitHub / Word). It carries the
+   structure, layout and the Fluent palette, so selecting "Fluent" uses this
+   file directly with only a page-width overlay on top; GitHub and Word add a
+   thin family overlay (github/github.css, word/word.css) that overrides the
+   palette and typography. Dark mode lives in @media (prefers-color-scheme:
+   dark) blocks here and in the overlays.
+   ========================================================================== */
+
 /* font face configs */
 
 :root {

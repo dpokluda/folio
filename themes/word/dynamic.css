@@ -1,9 +1,10 @@
 /* ==========================================================================
-   microsoft-word/word-page-dynamic.css  —  full-window page geometry
+   word/dynamic.css  —  full-window page geometry
    --------------------------------------------------------------------------
-   Shared building block (not a selectable theme). The sheet fills the app
-   window with an equal margin on all four sides and grows/shrinks as the
-   window is resized. Sheet look + typography come from word-type.css.
+   Page-width overlay for the Word family (not selectable on its own). The
+   sheet fills the app window with an equal margin on all four sides and
+   grows/shrinks as the window is resized. Sheet look + typography come from
+   word/word.css.
    ========================================================================== */
 
 #write {

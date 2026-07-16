@@ -1,8 +1,9 @@
 /* ==========================================================================
-   microsoft-word/word-page-letter.css  —  US Letter page geometry (Word margins)
+   word/us-letter.css  —  US Letter page geometry (Word margins)
    --------------------------------------------------------------------------
-   Shared building block (not a selectable theme). Sets only the page width
-   and margins; the sheet look + typography come from word-type.css.
+   Page-width overlay for the Word family (not selectable on its own). Sets
+   only the page width and margins; the sheet look + typography come from
+   word/word.css.
    US Letter = 8.5in (612pt); Word margins: 1in top/bottom, 0.75in sides.
    ========================================================================== */
 

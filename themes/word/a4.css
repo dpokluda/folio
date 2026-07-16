@@ -1,8 +1,8 @@
 /* ==========================================================================
-   microsoft-word/word-page-a4.css  —  A4 page geometry (Word margins)
+   word/a4.css  —  A4 page geometry (Word margins)
    --------------------------------------------------------------------------
-   Shared building block (not a selectable theme). A4 = 210mm (595pt) wide;
-   Word margins: 1in top/bottom, 0.75in sides.
+   Page-width overlay for the Word family (not selectable on its own). A4 =
+   210mm (595pt) wide; Word margins: 1in top/bottom, 0.75in sides.
    ========================================================================== */
 
 #write {

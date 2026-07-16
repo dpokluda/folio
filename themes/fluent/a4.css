@@ -1,16 +1,16 @@
 /* ==========================================================================
-   Fluent Dynamic  —  full-window "paper" that grows with the window
+   Fluent A4  —  fixed "printed page" width (A4)
    --------------------------------------------------------------------------
-   Builds on the base Fluent theme. The writing area is a white sheet on a
-   soft grey backdrop (like the US Letter / A4 themes) but instead of a fixed
-   page width it fills the application window, leaving an equal margin on
-   every side. Resize the window and the sheet — and the text — resize too.
+   Builds on the base Fluent theme and constrains the writing column to an
+   A4-sized sheet (210mm ≈ 794px @96dpi), rendered as a white page floating
+   on a soft grey backdrop — similar to a Word print view.
 
-   Width overlay: Folio loads the base `fluent.css` separately (as its own
-   <link>) and then this partial on top, so no @import is needed here.
+   Width overlay: Folio loads the base `base.css` separately (as its own
+   <link>) and then this partial on top, so no @import is needed here — this
+   file only sets the A4 page geometry, the sheet look and the compact type.
    ========================================================================== */
 
-/* --- backdrop behind the sheet ------------------------------------------ */
+/* --- backdrop behind the page ------------------------------------------- */
 :root {
     --bg-color: #eceef1;
 }
@@ -51,18 +51,11 @@ html {
     font-size: 11pt;
 }
 
-/* --- the sheet (fills the window, equal gap on all sides) ---------------- */
-/* A normal-flow block with no explicit width fills its container minus its
-   margins, so a symmetric margin here makes the sheet stretch with the
-   window while keeping a consistent frame around it.
-   !important guarantees the base theme's width caps never win.             */
+/* --- the page / sheet ---------------------------------------------------- */
 #write {
-    box-sizing: border-box;
-    max-width: none !important;       /* remove the fixed cap                */
-    width: auto !important;
-    align-self: stretch;              /* defensive: fill if parent is flex   */
-    margin: 36px !important;          /* equal frame on all four sides       */
-    padding: 60px 72px 90px;          /* inner text margins, like a page     */
+    max-width: 794px;                 /* A4 width @96dpi (210mm)             */
+    margin: 28px auto 72px;
+    padding: 76px 82px 110px;
     background: #ffffff;
     border-radius: 2px;
     box-shadow:
@@ -70,21 +63,24 @@ html {
         0 10px 28px rgba(0, 0, 0, 0.10);
 }
 
-/* Neutralise base Fluent's large-window breakpoints (which otherwise re-cap
-   the width at 1024px / 1200px).                                            */
+/* Lock the width regardless of window size */
 @media only screen and (min-width: 1400px) {
-    #write { max-width: none !important; }
+    #write { max-width: 794px; }
 }
 @media only screen and (min-width: 1800px) {
-    #write { max-width: none !important; }
+    #write { max-width: 794px; }
 }
 
-/* Let the source-code (raw markdown) view use the full width too */
+/* Source-code (raw markdown) mode: plain full-width editor — no page look.
+   (Base Fluent caps it at 1024px; unconstrain it here.)                     */
 #typora-source .CodeMirror-lines {
     max-width: none;
 }
 
 /* --- dark appearance ----------------------------------------------------- */
+/* Folio flips prefers-color-scheme via Electron's nativeTheme when the user
+   picks Appearance ▸ Dark. Base Fluent already swaps its palette dark; here
+   we only need to darken the grey backdrop and the white paper sheet.        */
 @media (prefers-color-scheme: dark) {
     :root { --bg-color: #0a0b0d; }
     #write {
@@ -99,12 +95,3 @@ html {
     #typora-source .CodeMirror,
     #typora-source .CodeMirror-gutters { background-color: #0f1012; }
 }
-
-/* --- optional tweaks -----------------------------------------------------
-   • Wider / narrower frame around the sheet: change `margin: 36px`.
-   • Cap the width on very wide monitors (so lines don't get too long) while
-     still filling smaller windows — swap the margin line for:
-         max-width: 1600px !important;
-         margin: 36px auto !important;
-     and set both @media blocks to `max-width: 1600px !important;`.
-   ------------------------------------------------------------------------- */
