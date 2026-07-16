@@ -1,10 +1,10 @@
 # Folio
 
-**A lightweight, themeable Markdown editor & viewer with a Typora-like look — edit the
+**A lightweight, themeable Markdown editor & viewer with a Typora-like look, edit the
 source, preview it rendered, swap CSS themes (Typora-theme compatible).**
 
 Folio renders your Markdown into a paged, themed "sheet" (just like Typora), lets you flip
-into a themed source-code editor, and switches the whole look — preview *and* editor — by
+into a themed source-code editor, and switches the whole look, preview *and* editor, by
 swapping a single CSS theme file.
 
 ![Folio rendering the Markdown formatting tour with the Fluent theme](docs/folio.png)
@@ -13,7 +13,7 @@ swapping a single CSS theme file.
 
 ## Why Folio?
 
-I own a valid Typora license, but it's limited to 3 machines and I use many more — work and
+I own a valid Typora license, but it's limited to 3 machines and I use many more, work and
 home desktops, several laptops, and cloud/remote boxes. Folio lets me **view and lightly
 edit** my Markdown with the same familiar, paged, themeable look on all those extra
 machines. It's meant to **complement Typora, not replace it**: same theming conventions, so
@@ -32,16 +32,16 @@ the CSS themes I already use "just work."
 - **Rendered preview** of GitHub-flavored Markdown injected into Typora's `#write`
   container, so Typora themes style it as a page/sheet.
 - **Themed source-code editor** (CodeMirror 6) under `#typora-source`, so a selected theme
-  styles the editor too — including the grey-bar-free source-mode background.
-- **Typora-compatible theming** on three independent axes — **Style** (Fluent, GitHub,
-  Microsoft Word), **Appearance** (Light, Dark) and **Page width** (Dynamic, A4, US Letter) —
+  styles the editor too, including the grey-bar-free source-mode background.
+- **Typora-compatible theming** on three independent axes, **Style** (Fluent, GitHub,
+  Microsoft Word), **Appearance** (Light, Dark) and **Page width** (Dynamic, A4, US Letter),
   chosen from the **Themes** menu and remembered between launches.
 - **Live features** via [markdown-it](https://github.com/markdown-it/markdown-it): tables,
   strikethrough, task lists, footnotes, autolinking, typographic replacements, and emoji.
 - **Syntax highlighting** of fenced code blocks with
   [highlight.js](https://highlightjs.org/).
 - **Document outline** sidebar generated from headings.
-- **Folder mode / file explorer** — `File ▸ Open Folder…` shows a browsable tree of the
+- **Folder mode / file explorer**, `File > Open Folder…` shows a browsable tree of the
   Markdown files in a directory. Click a file to render it; click a link between documents
   to follow it in place (a folder link opens the folder's `_index.md`). The explorer stays
   in sync with whatever's rendered, and unsaved changes are guarded before navigating.
@@ -52,7 +52,7 @@ the CSS themes I already use "just work."
 - **Unsaved-changes tracking** with a title-bar indicator and a save prompt on open/close.
 - **Zoom** in/out/reset, and **cross-platform** (macOS, Linux, Windows).
 
-## How it works — the theming contract
+## How it works, the theming contract
 
 Folio deliberately mirrors Typora's DOM so existing themes render faithfully:
 
@@ -73,7 +73,7 @@ Folio deliberately mirrors Typora's DOM so existing themes render faithfully:
 ## How to build & run
 
 **Prerequisites:** [Node.js LTS](https://nodejs.org/) (Node 18+; developed on Node 20/24).
-Very new, non-LTS Node releases (26+) can trip up Electron's installer — see
+Very new, non-LTS Node releases (26+) can trip up Electron's installer, see
 [If Electron fails to install correctly](#if-electron-fails-to-install-correctly) below.
 
 ```sh
@@ -90,7 +90,7 @@ Electron. On first launch it opens a bundled `samples/welcome.md` demo document.
 #### If Electron fails to install correctly
 
 On some **bleeding-edge Node.js releases** (e.g. Node 26+), Electron's own
-`postinstall` step silently fails to unpack its runtime — the per-platform binary
+`postinstall` step silently fails to unpack its runtime, the per-platform binary
 downloads and is cached, but the bundled `extract-zip` extractor no-ops, leaving
 `node_modules/electron` with no `path.txt` and an empty `dist/`. Running the app
 then throws:
@@ -134,11 +134,11 @@ Build artifacts are written to `release/`.
 On Linux, packaging the `.deb` and running the resulting `.AppImage` need a few
 system libraries that aren't always installed by default:
 
-- **`libcrypt.so.1`** — electron-builder's bundled [`fpm`](https://fpm.readthedocs.io/)
+- **`libcrypt.so.1`**, electron-builder's bundled [`fpm`](https://fpm.readthedocs.io/)
   tool (used to build the `.deb`) links against the legacy `libcrypt.so.1`.
   Without it, `npm run dist` fails with
   *`ruby: error while loading shared libraries: libcrypt.so.1`*.
-- **`libfuse.so.2`** — AppImages need FUSE 2 to self-mount and run. Without it,
+- **`libfuse.so.2`**, AppImages need FUSE 2 to self-mount and run. Without it,
   running the built AppImage prints *`AppImages require FUSE to run`*.
 
 Install them with your distribution's package manager:
@@ -180,7 +180,7 @@ electron-builder/Windows limitation, not a Folio bug.
 
 Folio works around it automatically: `npm run dist` / `npm run dist:win` first
 run `scripts/prepare-wincodesign.js`, which pre-extracts that bundle with
-symlink creation disabled into electron-builder's cache — so no Administrator
+symlink creation disabled into electron-builder's cache, so no Administrator
 rights or Developer Mode are needed. (The macOS symlinks are irrelevant to a
 Windows build.)
 
@@ -194,14 +194,14 @@ built `Folio.exe` with `rcedit`. That step can fail with:
   errorOut=Fatal error: Unable to commit changes  (rcedit-x64.exe …)
 ```
 
-This is a **file lock**, not a Folio bug — usually antivirus (Windows Defender)
+This is a **file lock**, not a Folio bug, usually antivirus (Windows Defender)
 scanning the ~180 MB executable the instant it's written, or a previously
 packaged **Folio still running** and holding `release\win-unpacked\Folio.exe`
 open. Folio mitigates it automatically:
 
 - `npm run dist` first runs `scripts/clean-release.js`, which deletes the stale
   `*-unpacked` output. If it can't (because a packaged Folio is open) it stops
-  with a clear message instead of the cryptic rcedit error — just close Folio
+  with a clear message instead of the cryptic rcedit error, just close Folio
   and re-run.
 - Packaging then runs through `scripts/run-electron-builder.js`, which retries
   automatically when it detects the transient rcedit lock (and fails fast on any
@@ -215,9 +215,9 @@ again.
 
 ## How to use
 
-- **Open a file** — `File ▸ Open…` (`Ctrl/Cmd+O`). Recently opened files appear under
-  `File ▸ Open Recent`.
-- **Open from the command line** — launch Folio with a file path and it opens that document
+- **Open a file**, `File > Open…` (`Ctrl/Cmd+O`). Recently opened files appear under
+  `File > Open Recent`.
+- **Open from the command line**, launch Folio with a file path and it opens that document
   on startup (or focuses the running window and opens it):
 
   ```sh
@@ -231,11 +231,11 @@ again.
   You can also drop a file onto the app (or `Folio.exe`), or double-click a file associated
   with Folio. When launched with no file, Folio shows the welcome document.
 
-  **The `folio` command on macOS** — a packaged macOS build installs as
+  **The `folio` command on macOS**, a packaged macOS build installs as
   `/Applications/Folio.app`, and a `.app` bundle is a folder rather than a plain
   executable, so it isn't on your `PATH` by default (on Windows the installer already
   puts `Folio` on `PATH`). To get a `folio` command in your terminal, use
-  `File ▸ Install 'folio' Command in PATH…`. This writes a small wrapper to
+  `File > Install 'folio' Command in PATH…`. This writes a small wrapper to
   `/usr/local/bin/folio`, after which you can run:
 
   ```sh
@@ -253,11 +253,11 @@ again.
   With no setup at all, `open -a Folio path/to/notes.md` launches an installed Folio and
   opens the file.
 
-  The wrapper works from any shell that has `/usr/local/bin` on its `PATH` — normally both
+  The wrapper works from any shell that has `/usr/local/bin` on its `PATH`, normally both
   `zsh` and `bash`, and `pwsh` too when it's launched from your terminal. If you run
   PowerShell as a *login* shell and `folio` isn't found, `/usr/local/bin` simply isn't on
   its `PATH` (the same one-time setup pwsh needs for Homebrew and other CLI tools). Add this
-  line to your PowerShell **profile file** so it runs on every startup — open it with
+  line to your PowerShell **profile file** so it runs on every startup, open it with
   `pwsh -c 'code $PROFILE'` (or edit `~/.config/powershell/Microsoft.PowerShell_profile.ps1`)
   and add:
 
@@ -267,35 +267,35 @@ again.
 
   Then open a new PowerShell window (or run `. $PROFILE`) and check with `Get-Command folio`.
   Note: typing that line at the `pwsh` prompt only changes the current session and is lost
-  when you close it — it has to live in the profile file to persist. This is PowerShell
+  when you close it, it has to live in the profile file to persist. This is PowerShell
   syntax for the PowerShell profile; `zsh`/`bash` need nothing extra.
-- **Open a folder** — `File ▸ Open Folder…` (`Ctrl/Cmd+Shift+O`) opens a **file explorer**
+- **Open a folder**, `File > Open Folder…` (`Ctrl/Cmd+Shift+O`) opens a **file explorer**
   down the left side listing the Markdown files in that directory tree. Click a file to render
   it; the explorer highlights whatever's showing. Clicking a link from one document to another
   follows it in place, and a link that points at a folder opens that folder's `_index.md`
   (falling back to `README.md`). If the current document has unsaved edits you're prompted to
-  save or discard first. Toggle the explorer with `View ▸ Toggle File Explorer`
+  save or discard first. Toggle the explorer with `View > Toggle File Explorer`
   (`Ctrl/Cmd+Shift+E`) or the **Files** button in the status bar; the last opened folder is
-  remembered between launches. Close the folder with `File ▸ Close Folder` (`Ctrl/Cmd+Shift+W`),
+  remembered between launches. Close the folder with `File > Close Folder` (`Ctrl/Cmd+Shift+W`),
   which hides the explorer and returns to the Welcome document.
-- **Toggle source mode** — `View ▸ Toggle Source Code Mode` (`Ctrl/Cmd+/`), or the
+- **Toggle source mode**, `View > Toggle Source Code Mode` (`Ctrl/Cmd+/`), or the
   **`</>` Source** button in the status bar. The themed CodeMirror editor appears; toggle
   back (the button reads **Exit Source**) to re-render the preview.
-- **Switch themes** — the **Themes** menu offers three independent choices: a **Style**
+- **Switch themes**, the **Themes** menu offers three independent choices: a **Style**
   (Fluent, GitHub, Microsoft Word), an **Appearance** (Light, Dark) and a **Page width**
   (Dynamic, A4, US Letter). Both the preview and the source editor restyle instantly; your
   selection is remembered.
-- **Outline** — `View ▸ Toggle Outline` (`Ctrl/Cmd+Shift+K`), or the **Outline** button in
+- **Outline**, `View > Toggle Outline` (`Ctrl/Cmd+Shift+K`), or the **Outline** button in
   the status bar, shows a headings sidebar.
-- **Save** — `Ctrl/Cmd+S` (Save As: `Ctrl/Cmd+Shift+S`). An unsaved document shows a `•` in
+- **Save**, `Ctrl/Cmd+S` (Save As: `Ctrl/Cmd+Shift+S`). An unsaved document shows a `•` in
   the title bar and prompts before you close or open another file.
-- **Export to PDF** — `File ▸ Export to PDF…`. The page size follows the active **Page width**
+- **Export to PDF**, `File > Export to PDF…`. The page size follows the active **Page width**
   (A4 vs US Letter).
-- **Zoom** — `Ctrl/Cmd +` / `Ctrl/Cmd -` / `Ctrl/Cmd 0`.
-- **Find** — `Ctrl/Cmd+F` searches the current document: a find bar appears over the rendered
+- **Zoom**, `Ctrl/Cmd +` / `Ctrl/Cmd -` / `Ctrl/Cmd 0`.
+- **Find**, `Ctrl/Cmd+F` searches the current document: a find bar appears over the rendered
   preview (highlighting every match, with next/previous), and in source mode it opens
   CodeMirror's search panel.
-- **Find in Files** — `Ctrl/Cmd+Shift+F` (needs an open folder) searches every Markdown file in
+- **Find in Files**, `Ctrl/Cmd+Shift+F` (needs an open folder) searches every Markdown file in
   the folder. A search box appears at the top of the file-explorer pane; results are grouped by
   file, and clicking a match opens that document with the term highlighted. Press `Esc` (or clear
   the box) to dismiss the search and return to the file tree.
@@ -317,8 +317,8 @@ That's 3 × 2 × 3 = 18 combinations from a handful of small stylesheets, rather
 separate theme files. Your selection is remembered between launches.
 
 **How it's composed.** Folio ships a `themes/` folder and builds each look at runtime by
-layering a few stylesheets — a base foundation, a **Style** overlay, then a **Page-width**
-overlay — mounted as `<link class="folio-theme">` elements (later layers win):
+layering a few stylesheets, a base foundation, a **Style** overlay, then a **Page-width**
+overlay, mounted as `<link class="folio-theme">` elements (later layers win):
 
 | File                                   | Role                                                        |
 | -------------------------------------- | ----------------------------------------------------------- |
@@ -344,7 +344,7 @@ Dark-aware automatically.
 ### ⚠️ A note about the Aptos fonts (Microsoft Word themes)
 
 The Microsoft Word themes reference **Aptos** fonts. The `.ttf` files are **Microsoft Office
-"cloud fonts"** and are **not redistributed** in this repository — they're excluded via
+"cloud fonts"** and are **not redistributed** in this repository, they're excluded via
 `.gitignore` (`themes/microsoft-word/fonts/*.ttf`).
 
 To get the full Word look, supply your own Aptos fonts by copying these files into
@@ -390,12 +390,12 @@ build.js         esbuild bundler for the renderer
 
 ## Acknowledgements
 
-- **Typora** — for the theming conventions (`#write`, `#typora-source`,
+- **Typora**, for the theming conventions (`#write`, `#typora-source`,
   `typora-sourceview-on`) this app deliberately mirrors for compatibility.
-- **[Electron](https://www.electronjs.org/)** — cross-platform Chromium shell.
-- **[CodeMirror 6](https://codemirror.net/)** — the source-code editor.
-- **[markdown-it](https://github.com/markdown-it/markdown-it)** and its plugins — Markdown
+- **[Electron](https://www.electronjs.org/)**, cross-platform Chromium shell.
+- **[CodeMirror 6](https://codemirror.net/)**, the source-code editor.
+- **[markdown-it](https://github.com/markdown-it/markdown-it)** and its plugins, Markdown
   rendering.
-- **[highlight.js](https://highlightjs.org/)** — fenced-code syntax highlighting.
+- **[highlight.js](https://highlightjs.org/)**, fenced-code syntax highlighting.
 - The **[Fluent](https://github.com/li3zhen1/Fluent-Typora)** theme, on which the bundled
   Fluent variants are based.

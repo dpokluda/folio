@@ -92,6 +92,7 @@ const $findCount = document.getElementById('folio-find-count');
 const $findPrev = document.getElementById('folio-find-prev');
 const $findNext = document.getElementById('folio-find-next');
 const $findClose = document.getElementById('folio-find-close');
+const $linkHint = document.getElementById('folio-link-hint');
 
 // ---------------------------------------------------------------------------
 // CodeMirror editor
@@ -166,6 +167,7 @@ function renderPreview() {
   // files are untrusted, so sanitize before injection to strip scripts and
   // inline event handlers (e.g. <img onerror=…>) that would otherwise run.
   $write.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['target'] });
+  hideLinkHint();
   resolveLocalAssets();
   wireLinks();
   buildOutline();
@@ -230,6 +232,63 @@ function wireLinks() {
 // on success, sends back a load-document that updates the view + explorer.
 function navigateTo(payload) {
   Promise.resolve(window.folioAPI.navigate(payload)).catch((err) => console.error(err));
+}
+
+// --- Link hover hint -------------------------------------------------------
+// Browser-style status hint: while the pointer is over a link in the rendered
+// preview, show its target in a small overlay pinned to the bottom-left.
+// Wired once via event delegation on #write so it survives re-renders.
+function linkHintText(a) {
+  const href = a.getAttribute('href') || '';
+  if (!href) return '';
+  if (href.startsWith('#')) return href; // in-page anchor
+  // Resolve relative targets against the open document so the hint shows where
+  // the link actually points, mirroring how clicks are resolved.
+  if (state.baseUrl && !/^[a-z][a-z0-9+.-]*:/i.test(href) && !href.startsWith('//')) {
+    try {
+      const resolved = new URL(href, state.baseUrl);
+      if (resolved.protocol === 'file:') {
+        try {
+          return decodeURIComponent(resolved.pathname);
+        } catch (_) {
+          return resolved.pathname;
+        }
+      }
+      return resolved.href;
+    } catch (_) {
+      /* fall through to raw href */
+    }
+  }
+  try {
+    return decodeURI(href);
+  } catch (_) {
+    return href;
+  }
+}
+
+function showLinkHint(a) {
+  const text = linkHintText(a);
+  if (!text) return;
+  $linkHint.textContent = text;
+  $linkHint.hidden = false;
+}
+
+function hideLinkHint() {
+  $linkHint.hidden = true;
+  $linkHint.textContent = '';
+}
+
+function setupLinkHint() {
+  $write.addEventListener('mouseover', (e) => {
+    const a = e.target.closest('a[href]');
+    if (a && $write.contains(a)) showLinkHint(a);
+  });
+  $write.addEventListener('mouseout', (e) => {
+    const a = e.target.closest('a[href]');
+    if (a && !a.contains(e.relatedTarget)) hideLinkHint();
+  });
+  // Safety net: leaving the preview entirely (e.g. onto the status bar) clears it.
+  $preview.addEventListener('mouseleave', hideLinkHint);
 }
 
 // GitHub-style heading slug so both the outline and `#anchor` links resolve to
@@ -591,6 +650,7 @@ function setSourceMode(on) {
     if (!editor) createEditor(state.docText);
     else setEditorText(state.docText);
     if (state.find.open) closeFindBar();
+    hideLinkHint();
     $preview.hidden = true;
     $source.hidden = false;
     // CM needs a measure once it becomes visible.
@@ -933,6 +993,9 @@ async function boot() {
   $btnSource.addEventListener('click', () => setSourceMode(!state.sourceMode));
   $btnOutline.addEventListener('click', () => setOutlineVisible(!state.outlineVisible));
   $btnFiles.addEventListener('click', () => setFilesVisible(!state.filesVisible));
+
+  // Show link targets on hover in the rendered preview.
+  setupLinkHint();
 
   // Wire the in-preview find bar.
   $findInput.addEventListener('input', () => runFind($findInput.value));

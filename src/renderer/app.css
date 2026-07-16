@@ -517,6 +517,40 @@ body {
   opacity: 0.4;
 }
 
+/* --------------------------------------------------------------------------
+   Link hover hint: a small browser-style overlay pinned to the bottom-left of
+   the preview that shows a link's target while the pointer is over it. Scoped
+   to Folio chrome so no theme rules touch it; truncates long URLs.
+   -------------------------------------------------------------------------- */
+#folio-link-hint {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  z-index: 20;
+  max-width: min(80%, 640px);
+  margin: 0;
+  padding: 3px 10px;
+  box-sizing: border-box;
+  background: #f6f7f9;
+  border: 1px solid #e2e4e8;
+  border-left: none;
+  border-bottom: none;
+  border-top-right-radius: 5px;
+  color: #4a505a;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+#folio-link-hint[hidden] {
+  display: none;
+}
+
 /* ==========================================================================
    highlight.js token colours (GitHub-light palette).
 
@@ -626,6 +660,13 @@ body {
   }
   .folio-status-btn:hover { background: #26282e; color: #eef0f3; }
   .folio-status-btn.active { background: #2b3350; color: #9db4ff; }
+
+  /* --- link hover hint --- */
+  #folio-link-hint {
+    background: #17181b;
+    border-color: #2a2c30;
+    color: #9aa0aa;
+  }
 
   /* --- in-preview find bar --- */
   #folio-find {
