@@ -258,6 +258,27 @@ again.
   With no setup at all, `open -a Folio path/to/notes.md` launches an installed Folio and
   opens the file.
 
+  **The `folio` command on Linux**, a packaged Linux build ships as an AppImage, which is a
+  single executable file that isn't on your `PATH` on its own. Launch Folio from the
+  AppImage and use `File > Install 'folio' Command in PATH…` to symlink it into
+  `~/.local/bin/folio`, after which you can run:
+
+  ```sh
+  folio path/to/notes.md
+  ```
+
+  Unlike macOS this needs no `sudo` — `~/.local/bin` is your own directory and is on `PATH`
+  by default on most modern distributions. If the menu item is greyed out or missing, Folio
+  wasn't launched from an AppImage (the `APPIMAGE` environment variable isn't set): a `.deb`
+  install already puts `folio` on your `PATH`, so there's nothing to do. Otherwise you can
+  create the symlink yourself:
+
+  ```sh
+  mkdir -p ~/.local/bin && ln -sf /path/to/Folio.AppImage ~/.local/bin/folio
+  ```
+
+  You may need to open a new terminal (and have `~/.local/bin` on your `PATH`).
+
   The wrapper works from any shell that has `/usr/local/bin` on its `PATH`, normally both
   `zsh` and `bash`, and `pwsh` too when it's launched from your terminal. If you run
   PowerShell as a *login* shell and `folio` isn't found, `/usr/local/bin` simply isn't on

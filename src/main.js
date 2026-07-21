@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme, clipboard } = require('electron');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { pathToFileURL } = require('url');
 const { Store } = require('./store');
@@ -262,6 +263,7 @@ function rebuildMenu() {
   const session = focusedSession();
   const template = buildMenu({
     isMac: process.platform === 'darwin',
+    canInstallShellCommand: canInstallShellCommand(),
     styleFamily: store.get('styleFamily'),
     appearance: store.get('appearance'),
     pageWidth: store.get('pageWidth'),
@@ -366,57 +368,37 @@ function copyDocumentPath() {
   send(session, 'command', { name: 'toast', text: 'Path copied to clipboard' });
 }
 
-// macOS: install a small `folio` wrapper into /usr/local/bin so the app can be
-// launched from the terminal (the .app bundle itself isn't on PATH). The wrapper
-// shells out to `open -a "Folio"`, which routes any file arg through the app's
-// existing `open-file` handling. Never crashes the app: everything is guarded.
+// Whether the "Install 'folio' Command in PATH" menu item should be offered.
+// macOS: always (the .app bundle isn't on PATH). Linux: only when running as an
+// AppImage (the single-file executable we can symlink to). Windows: never — a
+// packaged install already puts Folio on PATH.
+function canInstallShellCommand() {
+  if (process.platform === 'darwin') return true;
+  if (process.platform === 'linux') return !!process.env.APPIMAGE;
+  return false;
+}
+
+// Install a small `folio` launcher into a PATH directory so the app can be
+// started from the terminal. macOS and Linux differ in how (see the per-platform
+// helpers below). Never crashes the app: everything is guarded.
 function installShellCommand() {
   const session = focusedSession();
   const parentWin = session ? session.win : null;
 
   try {
-    if (process.platform !== 'darwin') {
+    if (process.platform === 'darwin') {
+      installShellCommandMac(parentWin);
+    } else if (process.platform === 'linux') {
+      installShellCommandLinux(parentWin);
+    } else {
       dialog.showMessageBox(parentWin, {
         type: 'info',
         title: 'Install Command',
-        message: "Installing the 'folio' command isn't supported on this platform yet.",
-        detail:
-          'On Windows a packaged install already places Folio on your PATH, and Linux support is planned.',
+        message: "Installing the 'folio' command isn't supported on this platform.",
+        detail: 'On Windows a packaged install already places Folio on your PATH.',
         buttons: ['OK'],
       });
-      return;
     }
-
-    const binDir = '/usr/local/bin';
-    const target = `${binDir}/folio`;
-    const script = '#!/bin/sh\nexec open -a "Folio" "$@"\n';
-    const manualCommand =
-      `sudo mkdir -p ${binDir} && ` +
-      `printf '#!/bin/sh\\nexec open -a "Folio" "$@"\\n' | sudo tee ${target} >/dev/null && ` +
-      `sudo chmod 0755 ${target}`;
-
-    try {
-      fs.mkdirSync(binDir, { recursive: true });
-      fs.writeFileSync(target, script, { mode: 0o755 });
-      fs.chmodSync(target, 0o755); // ensure mode even if the file pre-existed
-    } catch (err) {
-      if (err && (err.code === 'EACCES' || err.code === 'EPERM')) {
-        const response = dialog.showMessageBoxSync(parentWin, permissionDialogOptions(target, manualCommand));
-        if (response === 0) clipboard.writeText(manualCommand);
-        return;
-      }
-      throw err;
-    }
-
-    dialog.showMessageBox(parentWin, {
-      type: 'info',
-      title: 'Command Installed',
-      message: "The 'folio' command was installed.",
-      detail:
-        `You can now run:\n\n    folio path/to/file.md\n\n` +
-        `You may need to open a new terminal, and make sure ${binDir} is on your PATH.`,
-      buttons: ['OK'],
-    });
   } catch (err) {
     try {
       dialog.showMessageBox(parentWin, {
@@ -432,13 +414,103 @@ function installShellCommand() {
   }
 }
 
-// Dialog shown when /usr/local/bin/folio can't be written without elevation.
-// "Copy Command" (button 0) copies the sudo one-liner to the clipboard.
+// macOS: write a small `folio` wrapper into /usr/local/bin. The .app bundle
+// isn't on PATH and isn't a plain executable, so the wrapper shells out to
+// `open -a "Folio"`, which routes any file arg through the app's existing
+// `open-file` handling. /usr/local/bin is on PATH by default on macOS.
+function installShellCommandMac(parentWin) {
+  const binDir = '/usr/local/bin';
+  const target = `${binDir}/folio`;
+  const script = '#!/bin/sh\nexec open -a "Folio" "$@"\n';
+  const manualCommand =
+    `sudo mkdir -p ${binDir} && ` +
+    `printf '#!/bin/sh\\nexec open -a "Folio" "$@"\\n' | sudo tee ${target} >/dev/null && ` +
+    `sudo chmod 0755 ${target}`;
+
+  try {
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(target, script, { mode: 0o755 });
+    fs.chmodSync(target, 0o755); // ensure mode even if the file pre-existed
+  } catch (err) {
+    if (err && (err.code === 'EACCES' || err.code === 'EPERM')) {
+      const response = dialog.showMessageBoxSync(parentWin, permissionDialogOptions(target, manualCommand));
+      if (response === 0) clipboard.writeText(manualCommand);
+      return;
+    }
+    throw err;
+  }
+
+  dialog.showMessageBox(parentWin, {
+    type: 'info',
+    title: 'Command Installed',
+    message: "The 'folio' command was installed.",
+    detail:
+      `You can now run:\n\n    folio path/to/file.md\n\n` +
+      `You may need to open a new terminal, and make sure ${binDir} is on your PATH.`,
+    buttons: ['OK'],
+  });
+}
+
+// Linux: an AppImage is a single executable file, so we simply symlink it into
+// ~/.local/bin (the XDG user bin dir, on PATH by default on modern distros and
+// writable without sudo — no wrapper script needed). process.env.APPIMAGE is set
+// by the AppImage runtime to the .AppImage path we link to.
+function installShellCommandLinux(parentWin) {
+  const appImagePath = process.env.APPIMAGE;
+  if (!appImagePath) {
+    dialog.showMessageBox(parentWin, {
+      type: 'info',
+      title: 'Install Command',
+      message: "Installing the 'folio' command needs Folio to be running as an AppImage.",
+      detail:
+        'This option symlinks the AppImage onto your PATH. It only works when Folio was ' +
+        'launched from a packaged .AppImage (the APPIMAGE environment variable is set).',
+      buttons: ['OK'],
+    });
+    return;
+  }
+
+  const binDir = path.join(os.homedir(), '.local', 'bin');
+  const target = path.join(binDir, 'folio');
+  const manualCommand = `mkdir -p "${binDir}" && ln -sf "${appImagePath}" "${target}"`;
+
+  try {
+    fs.mkdirSync(binDir, { recursive: true });
+    // Remove any existing entry first so we can repoint it at the current
+    // AppImage (e.g. after an update moved/renamed the file).
+    try {
+      fs.unlinkSync(target);
+    } catch (err) {
+      if (err && err.code !== 'ENOENT') throw err;
+    }
+    fs.symlinkSync(appImagePath, target);
+  } catch (err) {
+    if (err && (err.code === 'EACCES' || err.code === 'EPERM')) {
+      const response = dialog.showMessageBoxSync(parentWin, permissionDialogOptions(target, manualCommand));
+      if (response === 0) clipboard.writeText(manualCommand);
+      return;
+    }
+    throw err;
+  }
+
+  dialog.showMessageBox(parentWin, {
+    type: 'info',
+    title: 'Command Installed',
+    message: "The 'folio' command was installed.",
+    detail:
+      `A symlink was created at ${target}.\n\nYou can now run:\n\n    folio path/to/file.md\n\n` +
+      `You may need to open a new terminal, and make sure ${binDir} is on your PATH.`,
+    buttons: ['OK'],
+  });
+}
+
+// Dialog shown when the target path can't be written without extra permissions.
+// "Copy Command" (button 0) copies a manual one-liner to the clipboard.
 function permissionDialogOptions(target, manualCommand) {
   return {
     type: 'warning',
     title: 'Install Command',
-    message: "Installing the 'folio' command needs elevated permissions.",
+    message: "Installing the 'folio' command needs different permissions.",
     detail:
       `Folio couldn't write ${target} directly. Run this in a terminal to install it manually:\n\n` +
       `${manualCommand}`,
