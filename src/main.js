@@ -415,16 +415,26 @@ function installShellCommand() {
 }
 
 // macOS: write a small `folio` wrapper into /usr/local/bin. The .app bundle
-// isn't on PATH and isn't a plain executable, so the wrapper shells out to
-// `open -a "Folio"`, which routes any file arg through the app's existing
-// `open-file` handling. /usr/local/bin is on PATH by default on macOS.
+// isn't on PATH and isn't a plain executable, so the wrapper invokes the binary
+// inside the bundle directly (the same approach VS Code's `code` command uses).
+//
+// Why not `open -a "Folio"`: `open` hands arguments to LaunchServices, which
+// delivers them as `open-file` events instead of on `process.argv`, and drops
+// them entirely for an app that's already running. Executing the bundle binary
+// keeps `folio <file>` and `folio <folder>` working in both cases — a second
+// launch forwards its argv through the `second-instance` event.
+//
+// /usr/local/bin is on PATH by default on macOS.
 function installShellCommandMac(parentWin) {
   const binDir = '/usr/local/bin';
   const target = `${binDir}/folio`;
-  const script = '#!/bin/sh\nexec open -a "Folio" "$@"\n';
+  // Escape for safe embedding inside a double-quoted shell string.
+  const exe = process.execPath.replace(/(["$`\\])/g, '\\$1');
+  const body = `nohup "${exe}" "$@" >/dev/null 2>&1 &\n`;
+  const script = `#!/bin/sh\n${body}`;
   const manualCommand =
     `sudo mkdir -p ${binDir} && ` +
-    `printf '#!/bin/sh\\nexec open -a "Folio" "$@"\\n' | sudo tee ${target} >/dev/null && ` +
+    `printf '#!/bin/sh\\n${body.replace(/(['\\])/g, '\\$1').replace(/\n/g, '\\n')}' | sudo tee ${target} >/dev/null && ` +
     `sudo chmod 0755 ${target}`;
 
   try {
@@ -445,7 +455,7 @@ function installShellCommandMac(parentWin) {
     title: 'Command Installed',
     message: "The 'folio' command was installed.",
     detail:
-      `You can now run:\n\n    folio path/to/file.md\n\n` +
+      `You can now run:\n\n    folio path/to/file.md\n    folio path/to/folder\n\n` +
       `You may need to open a new terminal, and make sure ${binDir} is on your PATH.`,
     buttons: ['OK'],
   });
@@ -498,7 +508,7 @@ function installShellCommandLinux(parentWin) {
     title: 'Command Installed',
     message: "The 'folio' command was installed.",
     detail:
-      `A symlink was created at ${target}.\n\nYou can now run:\n\n    folio path/to/file.md\n\n` +
+      `A symlink was created at ${target}.\n\nYou can now run:\n\n    folio path/to/file.md\n    folio path/to/folder\n\n` +
       `You may need to open a new terminal, and make sure ${binDir} is on your PATH.`,
     buttons: ['OK'],
   });
@@ -536,14 +546,28 @@ function sendFocused(channel, payload) {
 
 // Extract the first launch argument that resolves to an existing file OR
 // directory, returning { path, isDir }, or null when none is present. Skips the
-// executable, the app-path arg (present as "." or the project dir when running
-// unpackaged), and any flags.
-function pathArgFrom(argv) {
-  const args = argv.slice(app.isPackaged ? 1 : 2);
-  for (const a of args) {
+// executable, flags, and the app-path argument (present as "." or the project
+// dir when running unpackaged). Relative arguments are resolved against `cwd`,
+// which for `second-instance` is the *sending* process's working directory.
+//
+// The app path is matched by identity rather than by a fixed argv offset,
+// because `second-instance` hands us the *other* process's argv — its packaging
+// may differ from ours, so this process's `app.isPackaged` can't tell us how
+// many leading arguments to drop.
+function pathArgFrom(argv, cwd) {
+  const appPath = (() => {
+    try {
+      return path.resolve(app.getAppPath());
+    } catch (_) {
+      return null;
+    }
+  })();
+
+  for (const a of argv.slice(1)) {
     if (!a || a.startsWith('-')) continue;
     try {
-      const resolved = path.resolve(a);
+      const resolved = path.resolve(cwd || process.cwd(), a);
+      if (appPath && resolved === appPath) continue; // the "." / project-dir arg
       if (!fs.existsSync(resolved)) continue;
       const st = fs.statSync(resolved);
       if (st.isFile()) return { path: resolved, isDir: false };
@@ -553,6 +577,19 @@ function pathArgFrom(argv) {
     }
   }
   return null;
+}
+
+// Map an existing path onto the { folder } / { path } shape createWindow expects,
+// so a directory always lands in file-explorer mode (same as File > Open Folder)
+// no matter which route it arrived by: CLI argv, macOS `open-file`, or Finder.
+// Returns null when the path no longer exists or can't be stat'ed.
+function launchTargetFor(target) {
+  try {
+    const resolved = path.resolve(target);
+    return fs.statSync(resolved).isDirectory() ? { folder: resolved } : { path: resolved };
+  } catch (_) {
+    return null;
+  }
 }
 
 // Open a bundled document (welcome / formatting tour) as an untitled buffer, so
@@ -1217,8 +1254,8 @@ if (!gotLock) {
 } else {
   // A second launch (e.g. `folio some.md` while already running) opens the given
   // path in a NEW window rather than stealing the current one.
-  app.on('second-instance', (_e, argv) => {
-    const arg = pathArgFrom(argv);
+  app.on('second-instance', (_e, argv, workingDirectory) => {
+    const arg = pathArgFrom(argv, workingDirectory);
     if (arg && arg.isDir) createWindow({ folder: arg.path });
     else if (arg) createWindow({ path: arg.path });
     else {
@@ -1230,27 +1267,32 @@ if (!gotLock) {
         createWindow();
       }
     }
+    // The relaunched process was started from a terminal rather than
+    // LaunchServices, so macOS won't bring us forward on its own.
+    if (process.platform === 'darwin') app.focus({ steal: true });
   });
 
-  // macOS: files opened via Finder / `open` arrive through this event, which
-  // can fire before the app is ready.
+  // macOS: files and folders opened via Finder / `open` arrive through this
+  // event, which can fire before the app is ready.
   let pendingLaunchTarget = null;
   app.on('open-file', (e, filePath) => {
     e.preventDefault();
-    if (app.isReady()) {
-      createWindow({ path: filePath });
-    } else {
-      pendingLaunchTarget = { path: filePath };
-    }
+    const target = launchTargetFor(filePath);
+    if (!target) return;
+    if (app.isReady()) createWindow(target);
+    else pendingLaunchTarget = target;
   });
 
-  // Windows/Linux: a file or folder path passed on the command line at launch.
+  // Windows/Linux, and macOS when launched via the `folio` shell command: a file
+  // or folder path passed on the command line at launch.
   const launchArg = pathArgFrom(process.argv);
-  if (launchArg && launchArg.isDir) pendingLaunchTarget = { folder: launchArg.path };
-  else if (launchArg) pendingLaunchTarget = { path: launchArg.path };
+  if (launchArg) pendingLaunchTarget = launchArg.isDir ? { folder: launchArg.path } : { path: launchArg.path };
 
   app.whenReady().then(() => {
     createWindow(pendingLaunchTarget);
+    // On macOS the `folio` command execs the bundle binary directly instead of
+    // going through LaunchServices, so nothing brings the window to the front.
+    if (process.platform === 'darwin' && pendingLaunchTarget) app.focus({ steal: true });
     pendingLaunchTarget = null;
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) createWindow();

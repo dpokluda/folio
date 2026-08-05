@@ -222,19 +222,23 @@ again.
 
 - **Open a file**, `File > Open…` (`Ctrl/Cmd+O`). Recently opened files appear under
   `File > Open Recent`.
-- **Open from the command line**, launch Folio with a file path and it opens that document
-  on startup (or focuses the running window and opens it):
+- **Open from the command line**, launch Folio with a file *or folder* path. A file opens as
+  a document; a folder opens in file-explorer mode, exactly like `File > Open Folder…`:
 
   ```sh
   # from a dev checkout
   npm start -- path/to/notes.md
-  
+  npm start -- path/to/notes-folder
+
   # or a packaged build
   Folio path/to/notes.md
+  Folio path/to/notes-folder
   ```
 
-  You can also drop a file onto the app (or `Folio.exe`), or double-click a file associated
-  with Folio. When launched with no file, Folio shows the welcome document.
+  Relative paths are resolved against the directory you ran the command from. If Folio is
+  already running, the path opens in a **new window** rather than taking over the current
+  one. You can also drop a file onto the app (or `Folio.exe`), or double-click a file
+  associated with Folio. When launched with no path, Folio shows the welcome document.
 
   **The `folio` command on macOS**, a packaged macOS build installs as
   `/Applications/Folio.app`, and a `.app` bundle is a folder rather than a plain
@@ -245,6 +249,7 @@ again.
 
   ```sh
   folio path/to/notes.md
+  folio path/to/notes-folder
   ```
 
   You may need to open a new terminal (and have `/usr/local/bin` on your `PATH`). If the
@@ -252,11 +257,18 @@ again.
   can run yourself:
 
   ```sh
-  sudo mkdir -p /usr/local/bin && printf '#!/bin/sh\nexec open -a "Folio" "$@"\n' | sudo tee /usr/local/bin/folio >/dev/null && sudo chmod 0755 /usr/local/bin/folio
+  sudo mkdir -p /usr/local/bin && printf '#!/bin/sh\nnohup "/Applications/Folio.app/Contents/MacOS/Folio" "$@" >/dev/null 2>&1 &\n' | sudo tee /usr/local/bin/folio >/dev/null && sudo chmod 0755 /usr/local/bin/folio
   ```
 
-  With no setup at all, `open -a Folio path/to/notes.md` launches an installed Folio and
-  opens the file.
+  The wrapper runs the binary inside the bundle directly rather than going through
+  `open -a`. That matters: `open` routes arguments through LaunchServices, which delivers
+  them as file-open events (never folders) and drops them entirely when the app is already
+  running. Executing the binary keeps the argument on `process.argv`, so files and folders
+  work the same way whether or not Folio is running.
+
+  With no setup at all, `open -a Folio path/to/notes.md` also launches an installed Folio
+  and opens the file — but only for files, and only reliably when Folio isn't already
+  running.
 
   **The `folio` command on Linux**, a packaged Linux build ships as an AppImage, which is a
   single executable file that isn't on your `PATH` on its own. Launch Folio from the
@@ -265,6 +277,7 @@ again.
 
   ```sh
   folio path/to/notes.md
+  folio path/to/notes-folder
   ```
 
   Unlike macOS this needs no `sudo` — `~/.local/bin` is your own directory and is on `PATH`
