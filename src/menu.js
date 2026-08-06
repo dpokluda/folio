@@ -166,6 +166,17 @@ function buildMenu({ isMac, canInstallShellCommand, styleFamily, appearance, pag
       ? { label, accelerator: `Cmd+Alt+${letter}`, click: onClick }
       : { label: `${label}\tCtrl+Alt+${letter}`, click: onClick };
 
+  // Zoom: Electron cannot register `CommandOrControl+Plus` on Windows/Linux —
+  // "Plus" maps to the unshifted `=` virtual key, so neither Ctrl+= nor the
+  // Ctrl+Shift+= the user actually types for "Ctrl and +" ever matches and the
+  // item is dead. Same trick as ctrlAltItem: bake the hint into the label and
+  // let the renderer handle the keystroke (it accepts `=`, Shift+`=`/`+` and the
+  // numpad keys). macOS resolves the accelerator correctly, so it keeps it.
+  const zoomItem = (label, accelerator, hint, onClick) =>
+    isMac
+      ? { label, accelerator, click: onClick }
+      : { label: `${label}\t${hint}`, click: onClick };
+
   template.push({
     label: 'View',
     submenu: [
@@ -183,9 +194,9 @@ function buildMenu({ isMac, canInstallShellCommand, styleFamily, appearance, pag
         click: () => actions.toggleLineNumbers(),
       },
       { type: 'separator' },
-      { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: () => actions.zoomIn() },
-      { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: () => actions.zoomOut() },
-      { label: 'Reset Zoom', accelerator: 'CmdOrCtrl+0', click: () => actions.zoomReset() },
+      zoomItem('Zoom In', 'CmdOrCtrl+Plus', 'Ctrl++', () => actions.zoomIn()),
+      zoomItem('Zoom Out', 'CmdOrCtrl+-', 'Ctrl+-', () => actions.zoomOut()),
+      zoomItem('Reset Zoom', 'CmdOrCtrl+0', 'Ctrl+0', () => actions.zoomReset()),
       { type: 'separator' },
       { role: 'togglefullscreen' },
       { role: 'toggleDevTools' },

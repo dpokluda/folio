@@ -24,7 +24,13 @@ body {
 #folio-root {
   display: flex;
   flex-direction: row;
-  height: 100vh;
+  /* Must stay a percentage of <body>, never a viewport unit: zoom is applied to
+     this element (see applyZoom in renderer.js) and CSS `zoom` scales viewport
+     units, so `100vh` would render as `factor x window height` — overflowing the
+     window (status bar pushed off-screen) when zoomed in and leaving a dead gap
+     when zoomed out. Percentages resolve against the parent in the parent's own
+     zoom space, so `100%` fills the window exactly at every zoom level. */
+  height: 100%;
   width: 100%;
 }
 
@@ -191,7 +197,7 @@ body {
 #typora-source .cm-content {
   max-width: 900px;
   margin: 0 auto;
-  padding: 24px 8px 40vh;
+  padding: 24px 8px calc(40vh / var(--folio-zoom, 1));
   caret-color: currentColor;
 }
 #typora-source .cm-gutters {

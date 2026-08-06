@@ -983,7 +983,12 @@ function updateFindCount() {
 // ---------------------------------------------------------------------------
 function applyZoom() {
   const factor = Math.max(0.5, Math.min(2.5, 1 + state.zoom * 0.1));
-  document.getElementById('folio-root').style.zoom = String(factor);
+  const root = document.getElementById('folio-root');
+  root.style.zoom = String(factor);
+  // Exposed so styles that intentionally need *window*-relative sizing inside
+  // the zoomed subtree can divide viewport units back out (CSS `zoom` scales
+  // vh/vw, but not percentages).
+  root.style.setProperty('--folio-zoom', String(factor));
 }
 
 function zoom(delta) {
@@ -1284,6 +1289,30 @@ async function boot() {
         setOutlineVisible(!state.outlineVisible);
       }
     });
+
+    // Same story for View > Zoom (see menu.js): Electron can't bind
+    // `CommandOrControl+Plus` on Windows/Linux, so the zoom keystrokes are
+    // handled here. Accept every key that reasonably means "+" / "-" / "0":
+    // the `=`/`-`/`0` row keys (with or without Shift, since typing "+" on a US
+    // layout is Shift+`=`) and their numpad equivalents. Capture phase so the
+    // CodeMirror editor can't swallow them in source mode.
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (!e.ctrlKey || e.altKey || e.metaKey) return;
+        // Match on both the produced character and the physical key so
+        // non-US layouts (where "+" sits on another key) work too.
+        const key = e.key;
+        const code = e.code;
+        if (key === '+' || key === '=' || code === 'Equal' || code === 'NumpadAdd') zoom(1);
+        else if (key === '-' || key === '_' || code === 'Minus' || code === 'NumpadSubtract') zoom(-1);
+        else if (key === '0' || code === 'Digit0' || code === 'Numpad0') zoom(0);
+        else return;
+        e.preventDefault();
+        e.stopPropagation();
+      },
+      true
+    );
   }
   window.folioAPI.onSetTheme((themeFile) => applyTheme(themeFile));
   window.folioAPI.onSaved(() => markSaved());
