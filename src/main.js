@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme, clipboard } = require('electron');
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell, nativeTheme, clipboard, screen } = require('electron');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -161,6 +161,40 @@ function applyAppearance() {
 // ---------------------------------------------------------------------------
 // Window + title
 // ---------------------------------------------------------------------------
+// Pick the screen position for a new window. Only the *size* is persisted, so
+// without this every window would be created at the platform's default spot —
+// landing pixel-perfectly on top of the window already there, which makes
+// opening a second document look like the first one was replaced. Cascade each
+// new window down-right from the frontmost one (the convention every
+// multi-document app uses), wrapping back to the top-left of the display's work
+// area when the offset would push the window off-screen.
+const CASCADE_STEP = 30;
+
+function cascadeOrigin(width, height) {
+  const reference = BrowserWindow.getFocusedWindow() || BrowserWindow.getAllWindows().slice(-1)[0];
+  if (!reference || reference.isDestroyed()) return {};
+
+  let area;
+  try {
+    const [rx, ry] = reference.getPosition();
+    area = screen.getDisplayNearestPoint({ x: rx, y: ry }).workArea;
+  } catch (_) {
+    return {};
+  }
+
+  const [refX, refY] = reference.getPosition();
+  let x = refX + CASCADE_STEP;
+  let y = refY + CASCADE_STEP;
+
+  // Wrap to the work area's origin once the cascade would hang off the edge, so
+  // a long chain of windows stays fully on-screen instead of marching away.
+  if (x + width > area.x + area.width || y + height > area.y + area.height) {
+    x = area.x;
+    y = area.y;
+  }
+  return { x, y };
+}
+
 // Create a new application window with its own Session. `openTarget` optionally
 // seeds what the window opens once its renderer is ready: { path } for a file,
 // { folder } for a directory (explorer mode). With no target the window shows
@@ -170,6 +204,7 @@ function createWindow(openTarget = null) {
   const win = new BrowserWindow({
     width: bounds.width,
     height: bounds.height,
+    ...cascadeOrigin(bounds.width, bounds.height),
     minWidth: 640,
     minHeight: 480,
     backgroundColor: '#ffffff',
@@ -1256,16 +1291,20 @@ if (!gotLock) {
   // path in a NEW window rather than stealing the current one.
   app.on('second-instance', (_e, argv, workingDirectory) => {
     const arg = pathArgFrom(argv, workingDirectory);
-    if (arg && arg.isDir) createWindow({ folder: arg.path });
-    else if (arg) createWindow({ path: arg.path });
+    let session;
+    if (arg && arg.isDir) session = createWindow({ folder: arg.path });
+    else if (arg) session = createWindow({ path: arg.path });
     else {
-      const session = focusedSession();
-      if (session) {
-        if (session.win.isMinimized()) session.win.restore();
-        session.win.focus();
-      } else {
-        createWindow();
-      }
+      session = focusedSession();
+      if (!session) session = createWindow();
+    }
+    // Windows/Linux won't hand the foreground to a process the user didn't just
+    // interact with, so an existing or freshly created window can end up behind
+    // whatever is in front. Ask for it explicitly.
+    if (session && !session.win.isDestroyed()) {
+      if (session.win.isMinimized()) session.win.restore();
+      session.win.show();
+      session.win.focus();
     }
     // The relaunched process was started from a terminal rather than
     // LaunchServices, so macOS won't bring us forward on its own.

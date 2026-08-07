@@ -55,6 +55,10 @@ the CSS themes I already use "just work."
 - **File handling**: Open, Open Folder, Open Recent, Save, Save As, and **Export to PDF** (via
   Electron's `printToPDF`, honoring the A4 / US Letter page themes).
 - **Unsaved-changes tracking** with a title-bar indicator and a save prompt on open/close.
+- **Multiple documents at once**: `File > New Window` (`Ctrl/Cmd+Shift+N`) opens another
+  window with its own document, folder, history and unsaved state. Passing a path to the
+  `folio` command (or opening a second file from the desktop) while Folio is already running
+  also opens a new window. New windows cascade so they don't hide the one behind them.
 - **Zoom** in/out/reset, and **cross-platform** (macOS, Linux, Windows).
 
 ## How it works, the theming contract
@@ -351,6 +355,10 @@ again.
 - **Export to PDF**, `File > Export to PDF…`. The page size follows the active **Page width**
   (A4 vs US Letter).
 - **Zoom**, `Ctrl/Cmd +` / `Ctrl/Cmd -` / `Ctrl/Cmd 0`.
+- **New Window**, `Ctrl/Cmd+Shift+N` opens a second window so you can view or edit two
+  documents side by side. Each window is independent (its own document, folder, navigation
+  history and unsaved state); app-wide preferences such as the theme are shared. Folio runs
+  as a single process on every platform, so closing the last window quits the app.
 - **Find**, `Ctrl/Cmd+F` searches the current document: a find bar appears over the rendered
   preview (highlighting every match, with next/previous), and in source mode it opens
   CodeMirror's search panel.
