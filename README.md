@@ -58,7 +58,8 @@ the CSS themes I already use "just work."
 - **Multiple documents at once**: `File > New Window` (`Ctrl/Cmd+Shift+N`) opens another
   window with its own document, folder, history and unsaved state. Passing a path to the
   `folio` command (or opening a second file from the desktop) while Folio is already running
-  also opens a new window. New windows cascade so they don't hide the one behind them.
+  also opens a new window. New windows cascade so they don't hide the one behind them. The
+  **Window** menu lists every open window by document title and switches between them.
 - **Zoom** in/out/reset, and **cross-platform** (macOS, Linux, Windows).
 
 ## How it works, the theming contract
@@ -359,6 +360,10 @@ again.
   documents side by side. Each window is independent (its own document, folder, navigation
   history and unsaved state); app-wide preferences such as the theme are shared. Folio runs
   as a single process on every platform, so closing the last window quits the app.
+- **Switch windows**, the `Window` menu lists all open windows by document title (a mark shows
+  the active one); pick one to bring it to the front. `Select Next / Previous Window`
+  (`Cmd+\`` / `Cmd+Shift+\`` on macOS, `Ctrl+Tab` / `Ctrl+Shift+Tab` elsewhere) cycles through
+  them, and the menu also offers `Minimize` (plus `Zoom` and `Bring All to Front` on macOS).
 - **Find**, `Ctrl/Cmd+F` searches the current document: a find bar appears over the rendered
   preview (highlighting every match, with next/previous), and in source mode it opens
   CodeMirror's search panel.

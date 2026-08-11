@@ -32,6 +32,7 @@ class Session {
     this.lastMtimeMs = 0; // last-seen mtime of the watched file, to ignore our own writes
     this.history = []; // visited file docs [{ path, anchor }], oldest -> newest
     this.historyIndex = -1; // position within history; -1 when empty
+    this.windowLabel = null; // last title text shown in the Window menu list
   }
 }
 
@@ -263,6 +264,7 @@ function createWindow(openTarget = null) {
     stopWatching(session);
     sessions.delete(session.id);
     if (lastFocusedSession === session) lastFocusedSession = null;
+    rebuildMenu(); // drop the window from the Window menu list
   });
 
   rebuildMenu();
@@ -282,7 +284,15 @@ function updateTitle(session) {
   const base = session.currentPath
     ? path.basename(session.currentPath)
     : session.currentName || 'Untitled';
-  session.win.setTitle(`${session.isDirty ? '\u2022 ' : ''}${base} - Folio`);
+  const label = `${session.isDirty ? '\u2022 ' : ''}${base}`;
+  session.win.setTitle(`${label} - Folio`);
+  // The Window menu lists open windows by document title, so it has to follow
+  // renames and the dirty marker. Rebuild only when the text actually changes —
+  // setDirty fires on every keystroke and rebuilding the menu each time is slow.
+  if (session.windowLabel !== label) {
+    session.windowLabel = label;
+    rebuildMenu();
+  }
 }
 
 function setDirty(session, value) {
@@ -308,9 +318,21 @@ function rebuildMenu() {
     canGoBack: canGoBack(session),
     canGoForward: canGoForward(session),
     lineNumbers: !!store.get('lineNumbers'),
+    windows: listWindows(session),
     actions,
   });
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+// Live windows, oldest first, described for the Window menu.
+function listWindows(focused) {
+  return [...sessions.values()]
+    .filter((s) => !s.win.isDestroyed())
+    .map((s) => ({
+      id: s.id,
+      label: s.windowLabel || s.win.getTitle() || 'Untitled',
+      focused: focused === s,
+    }));
 }
 
 // Push the composed theme stack to every open window.
@@ -321,6 +343,19 @@ function pushThemeAll() {
 
 const actions = {
   newWindow: () => createWindow(),
+  focusWindow: (id) => focusSessionWindow(sessions.get(id)),
+  cycleWindow: (delta) => {
+    const live = [...sessions.values()].filter((s) => !s.win.isDestroyed());
+    if (live.length < 2) return;
+    const current = focusedSession();
+    const index = live.indexOf(current);
+    const next = index === -1 ? 0 : (index + delta + live.length) % live.length;
+    focusSessionWindow(live[next]);
+  },
+  minimizeWindow: () => {
+    const session = focusedSession();
+    if (session && !session.win.isDestroyed()) session.win.minimize();
+  },
   open: () => withSession((s) => doOpen(s)),
   openFolder: () => withSession((s) => doOpenFolder(s)),
   closeFolder: () => withSession((s) => doCloseFolder(s)),
@@ -381,10 +416,18 @@ const actions = {
   openFormattingTour: () => withSession((s) => openBuiltinDoc(s, 'formatting-tour')),
 };
 
+// Bring a window to the front, un-minimizing it first — a minimized window
+// ignores focus() on Windows/Linux and just bounces in the Dock on macOS.
+function focusSessionWindow(session) {
+  if (!session || session.win.isDestroyed()) return;
+  if (session.win.isMinimized()) session.win.restore();
+  session.win.show();
+  session.win.focus();
+}
+
 // Run an action against the focused window's Session, creating a new window when
 // none is focused (e.g. New/Open triggered on macOS with all windows closed).
-function withSession(fn) {
-  let session = focusedSession();
+function withSession(fn) {  let session = focusedSession();
   if (!session) session = createWindow();
   return fn(session);
 }

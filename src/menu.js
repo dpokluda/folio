@@ -3,7 +3,7 @@ const path = require('path');
 
 // "fluent" -> "Fluent", "word" -> "Microsoft Word" — the Style family radio
 // group uses explicit labels below.
-function buildMenu({ isMac, canInstallShellCommand, styleFamily, appearance, pageWidth, recentFiles, hasFolder, hasFile, canGoBack, canGoForward, lineNumbers, actions }) {
+function buildMenu({ isMac, canInstallShellCommand, styleFamily, appearance, pageWidth, recentFiles, hasFolder, hasFile, canGoBack, canGoForward, lineNumbers, windows, actions }) {
   // Install a `folio` command into a PATH directory. On macOS the .app bundle
   // isn't on PATH; on Linux an AppImage isn't either. Mirrors VS Code's
   // "Install 'code' command". The caller decides when it's available.
@@ -204,6 +204,45 @@ function buildMenu({ isMac, canInstallShellCommand, styleFamily, appearance, pag
   });
 
   template.push({ label: 'Themes', submenu: themeSubmenu });
+
+  // Window: switch between open Folio windows. Each open window is listed by its
+  // document title with a radio mark on the focused one — without this there is
+  // no in-app way to reach a window hidden behind another. Minimize deliberately
+  // carries no accelerator: the conventional Cmd+M belongs to Format ▸ Inline
+  // Math here, and a registered role accelerator would swallow it.
+  const openWindows = windows || [];
+  const windowList = openWindows.length
+    ? openWindows.map((w) => ({
+        label: w.label,
+        type: 'radio',
+        checked: !!w.focused,
+        click: () => actions.focusWindow(w.id),
+      }))
+    : [{ label: '(No open windows)', enabled: false }];
+
+  template.push({
+    label: 'Window',
+    submenu: [
+      { label: 'Minimize', click: () => actions.minimizeWindow() },
+      ...(isMac ? [{ role: 'zoom' }] : []),
+      { type: 'separator' },
+      {
+        label: 'Select Next Window',
+        accelerator: isMac ? 'Cmd+`' : 'Ctrl+Tab',
+        enabled: openWindows.length > 1,
+        click: () => actions.cycleWindow(1),
+      },
+      {
+        label: 'Select Previous Window',
+        accelerator: isMac ? 'Cmd+Shift+`' : 'Ctrl+Shift+Tab',
+        enabled: openWindows.length > 1,
+        click: () => actions.cycleWindow(-1),
+      },
+      ...(isMac ? [{ type: 'separator' }, { role: 'front' }] : []),
+      { type: 'separator' },
+      ...windowList,
+    ],
+  });
 
   template.push({
     role: 'help',
