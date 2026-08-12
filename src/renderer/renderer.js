@@ -7,6 +7,7 @@ import footnote from 'markdown-it-footnote';
 import { full as emojiPlugin } from 'markdown-it-emoji';
 import katexPlugin from '@vscode/markdown-it-katex';
 import hljs from 'highlight.js';
+import mermaid from 'mermaid';
 import DOMPurify from 'dompurify';
 
 import { EditorState, EditorSelection, Compartment, Prec } from '@codemirror/state';
@@ -48,6 +49,26 @@ const md = new MarkdownIt({
   // KaTeX. throwOnError:false shows the offending source in red instead of
   // aborting the whole render on a typo.
   .use(katexPlugin, { throwOnError: false });
+
+// ```mermaid fences are not code: replace the highlighted block with an empty
+// placeholder and stash the source in `env`. The diagram is drawn later, after
+// sanitization (see renderMermaidBlocks), because DOMPurify would strip the
+// <style>/<foreignObject> nodes mermaid's SVG depends on. Passing an index
+// rather than the code itself keeps the markup small and avoids a round trip
+// through HTML escaping.
+const defaultFence = md.renderer.rules.fence;
+md.renderer.rules.fence = function fence(tokens, idx, options, env, self) {
+  const token = tokens[idx];
+  const info = token.info ? md.utils.unescapeAll(token.info).trim() : '';
+  if (info.split(/\s+/)[0].toLowerCase() === 'mermaid') {
+    const sources = env && env.mermaid;
+    if (sources) {
+      const i = sources.push(token.content) - 1;
+      return `<div class="folio-mermaid" data-folio-mermaid="${i}"></div>\n`;
+    }
+  }
+  return defaultFence.call(this, tokens, idx, options, env, self);
+};
 
 // ---------------------------------------------------------------------------
 // State
@@ -345,12 +366,17 @@ function renderFrontMatter(fm) {
 
 function renderPreview() {
   const { frontMatter, body } = splitFrontMatter(currentText() || '');
-  let html = md.render(body);
+  // Collects the source of every ```mermaid fence, keyed by the index the fence
+  // rule writes into the placeholder it emits.
+  const env = { mermaid: [] };
+  let html = md.render(body, env);
   if (frontMatter != null) html = renderFrontMatter(frontMatter) + html;
   // markdown-it runs with html:true so documents may contain raw HTML. Opened
   // files are untrusted, so sanitize before injection to strip scripts and
   // inline event handlers (e.g. <img onerror=…>) that would otherwise run.
   $write.innerHTML = DOMPurify.sanitize(html, { ADD_ATTR: ['target'] });
+  renderMermaidBlocks(env.mermaid);
+  addCopyButtons();
   hideLinkHint();
   resolveLocalAssets();
   wireLinks();
@@ -358,6 +384,189 @@ function renderPreview() {
   updateStats();
   // Old match ranges point into the replaced DOM; recompute if find is open.
   if (state.find.open) runFind(state.find.query);
+}
+
+// ---------------------------------------------------------------------------
+// Mermaid diagrams
+// ---------------------------------------------------------------------------
+// Diagrams are drawn asynchronously *after* the sanitized HTML is in the DOM,
+// so mermaid's own output never passes through DOMPurify (it would lose the
+// embedded <style> and the <foreignObject> wrappers used for HTML labels).
+// That is safe because mermaid sanitizes the diagram source itself under
+// securityLevel:'strict', which also disables raw HTML and click handlers.
+//
+// Bumped on every preview render; an in-flight diagram whose generation is
+// stale simply stops, so results from a previous document can never land in
+// the new one after a fast file switch.
+let mermaidGeneration = 0;
+let mermaidPending = Promise.resolve();
+const prefersDark =
+  typeof window.matchMedia === 'function' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+
+// Mermaid measures label text against its configured font, so feed it the
+// active theme's body font instead of its own default. Recomputed on every
+// pass (initialize() is cheap) so a theme or appearance switch is picked up
+// without any extra bookkeeping.
+function initMermaid() {
+  let fontFamily = '';
+  try {
+    fontFamily = getComputedStyle($write).fontFamily || '';
+  } catch (_) {
+    /* fall back to mermaid's default */
+  }
+  mermaid.initialize({
+    startOnLoad: false,
+    securityLevel: 'strict',
+    suppressErrorRendering: true, // we render our own fallback; see below
+    theme: prefersDark && prefersDark.matches ? 'dark' : 'default',
+    ...(fontFamily ? { fontFamily } : {}),
+  });
+}
+
+function renderMermaidBlocks(sources) {
+  const gen = ++mermaidGeneration;
+  const nodes = $write.querySelectorAll('[data-folio-mermaid]');
+  if (!nodes.length || !sources || !sources.length) {
+    mermaidPending = Promise.resolve();
+    return mermaidPending;
+  }
+
+  mermaidPending = (async () => {
+    initMermaid();
+    let i = 0;
+    for (const el of nodes) {
+      // Abandon the pass as soon as a newer render supersedes it.
+      if (gen !== mermaidGeneration) return;
+      const code = sources[Number(el.getAttribute('data-folio-mermaid'))];
+      if (typeof code !== 'string') continue;
+      const id = `folio-mermaid-${gen}-${i++}`;
+      try {
+        const { svg, bindFunctions } = await mermaid.render(id, code);
+        if (gen !== mermaidGeneration || !el.isConnected) return;
+        el.innerHTML = svg;
+        if (typeof bindFunctions === 'function') bindFunctions(el);
+      } catch (err) {
+        if (gen !== mermaidGeneration || !el.isConnected) return;
+        renderMermaidError(el, code, err);
+      } finally {
+        // mermaid measures in a scratch element appended to <body>; it is not
+        // always cleaned up when a diagram fails to parse.
+        const scratch = document.getElementById(`d${id}`);
+        if (scratch) scratch.remove();
+      }
+    }
+    // Nothing awaits this pass except an export, so absorb anything the loop
+    // itself throws rather than leaving an unhandled rejection behind.
+  })().catch((err) => console.error('[folio] mermaid render failed', err));
+
+  return mermaidPending;
+}
+
+// A diagram that does not parse falls back to the source as a plain code block
+// plus the parser's complaint, so a typo costs one diagram rather than hiding
+// the content entirely.
+function renderMermaidError(el, code, err) {
+  const message = (err && (err.message || err.str)) || 'Invalid diagram';
+  el.classList.add('folio-mermaid-error');
+  el.innerHTML =
+    `<pre class="md-fences hljs"><code class="hljs">${md.utils.escapeHtml(code)}</code></pre>` +
+    `<p class="folio-mermaid-message">${md.utils.escapeHtml(String(message))}</p>`;
+  // Rendered after the main pass, so it misses the document-wide sweep.
+  addCopyButton(el.querySelector('pre.md-fences'));
+}
+
+// Awaited before PDF export so diagrams are painted before the page is printed.
+function whenMermaidSettled() {
+  return mermaidPending.catch(() => {});
+}
+
+// Diagrams bake the current appearance and body font into their SVG, so they
+// have to be drawn again when either changes. Cheap no-op for documents that
+// contain none.
+function refreshMermaid() {
+  if (state.sourceMode) return;
+  if (!$write.querySelector('[data-folio-mermaid]')) return;
+  renderPreview();
+}
+
+// ---------------------------------------------------------------------------
+// Code fence copy buttons
+// ---------------------------------------------------------------------------
+// Every fenced code block gets a small overlay button in its top-right corner,
+// revealed on hover (or keyboard focus). The button holds an icon and *no text
+// node* on purpose: #write is walked verbatim by the find-in-page highlighter
+// and the outline builder, so a textual "Copy" label would show up as a bogus
+// search match and could be swept into a text selection.
+const COPY_ICON =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<rect x="6" y="6" width="8.25" height="9" rx="1.5"/>' +
+  '<path d="M3.75 10.5H3a1.25 1.25 0 0 1-1.25-1.25V2.25A1.25 1.25 0 0 1 3 1h6.25a1.25 1.25 0 0 1 1.25 1.25V3"/>' +
+  '</svg>';
+const CHECK_ICON =
+  '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.75" ' +
+  'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+  '<path d="M3 8.5 6.5 12 13 4.5"/>' +
+  '</svg>';
+
+function addCopyButtons() {
+  $write.querySelectorAll('pre.md-fences').forEach(addCopyButton);
+}
+
+function addCopyButton(pre) {
+  if (!pre || pre.querySelector(':scope > .folio-copy')) return;
+  const code = pre.querySelector('code') || pre;
+  // Nothing worth copying (and nothing to anchor the button against).
+  if (!code.textContent.trim()) return;
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'folio-copy';
+  btn.innerHTML = COPY_ICON;
+  setCopyButtonLabel(btn, 'Copy code');
+  // The button lives inside the <pre>, whose content is whitespace-sensitive
+  // and user-selectable; keep it out of both.
+  btn.setAttribute('contenteditable', 'false');
+
+  btn.addEventListener('click', async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    // Fences render with a trailing newline; pasting it would add a stray
+    // blank line at the end.
+    const text = code.textContent.replace(/\n$/, '');
+    try {
+      await navigator.clipboard.writeText(text);
+      flashCopyButton(btn, true);
+    } catch (_) {
+      flashCopyButton(btn, false);
+    }
+  });
+
+  pre.appendChild(btn);
+}
+
+function setCopyButtonLabel(btn, label) {
+  btn.title = label;
+  btn.setAttribute('aria-label', label);
+}
+
+// Per-button timer so several fences can show their confirmation at once.
+const copyResetTimers = new WeakMap();
+
+function flashCopyButton(btn, ok) {
+  clearTimeout(copyResetTimers.get(btn));
+  btn.innerHTML = ok ? CHECK_ICON : COPY_ICON;
+  btn.classList.toggle('folio-copy-done', ok);
+  btn.classList.toggle('folio-copy-failed', !ok);
+  setCopyButtonLabel(btn, ok ? 'Copied' : 'Copy failed');
+  copyResetTimers.set(
+    btn,
+    setTimeout(() => {
+      btn.innerHTML = COPY_ICON;
+      btn.classList.remove('folio-copy-done', 'folio-copy-failed');
+      setCopyButtonLabel(btn, 'Copy code');
+    }, 1400)
+  );
 }
 
 // Rewrite relative asset URLs (e.g. `docs/folio.png`) so they resolve against
@@ -1013,13 +1222,23 @@ function applyTheme(payload) {
   state.themeFiles = files;
 
   document.querySelectorAll('link.folio-theme').forEach((l) => l.remove());
+  const loaded = [];
   for (const file of files) {
     const link = document.createElement('link');
     link.rel = 'stylesheet';
     link.className = 'folio-theme';
     link.href = state.themesBaseUrl + file;
+    loaded.push(
+      new Promise((resolve) => {
+        link.addEventListener('load', resolve, { once: true });
+        link.addEventListener('error', resolve, { once: true });
+      })
+    );
     document.head.appendChild(link);
   }
+  // A new theme can change the body font that mermaid measured against, but
+  // only once its stylesheets are actually in effect.
+  Promise.all(loaded).then(refreshMermaid);
 }
 
 // ---------------------------------------------------------------------------
@@ -1191,7 +1410,9 @@ function handleMainRequest(kind) {
       return currentText();
     case 'prepare-export':
       if (state.sourceMode) setSourceMode(false);
-      return true;
+      // Diagrams draw asynchronously; printing before they settle would
+      // capture empty placeholders.
+      return whenMermaidSettled().then(() => true);
     default:
       return null;
   }
@@ -1315,6 +1536,16 @@ async function boot() {
     );
   }
   window.folioAPI.onSetTheme((themeFile) => applyTheme(themeFile));
+  // Light/dark is a nativeTheme flip in the main process. Chromium updates the
+  // media query's value without firing its `change` event, so the main process
+  // tells us explicitly and we redraw the diagrams. Deferred a frame so the
+  // renderer has settled on the new appearance before mermaid reads it.
+  // Light/dark is a nativeTheme flip in the main process. Chromium updates the
+  // media query's value without firing its `change` event, so the main process
+  // tells us explicitly and we redraw the diagrams. Deferred with a timer (not
+  // requestAnimationFrame, which Chromium suspends for background windows)
+  // so the page has settled on the new appearance before mermaid reads it.
+  window.folioAPI.onAppearanceChanged(() => setTimeout(refreshMermaid, 0));
   window.folioAPI.onSaved(() => markSaved());
   window.folioAPI.onDocumentPathChanged((info) => {
     state.path = info && info.path;

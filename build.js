@@ -32,6 +32,11 @@ const options = {
   format: 'iife',
   target: ['chrome120'],
   sourcemap: true,
+  // Mermaid is by far the largest dependency (it carries its own parsers and
+  // layout engines), which makes an unminified bundle slow to parse on every
+  // window open. One-shot builds are minified; `--watch` keeps the bundle
+  // readable for development. The source map is emitted either way.
+  minify: !watch,
   logLevel: 'info',
 };
 

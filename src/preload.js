@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('folioAPI', {
   onLoadDocument: (cb) => listen('load-document', cb),
   onOpenFolder: (cb) => listen('open-folder', cb),
   onSetTheme: (cb) => listen('set-theme', cb),
+  onAppearanceChanged: (cb) => listen('appearance-changed', cb),
   onSaved: (cb) => listen('saved', cb),
   onDocumentPathChanged: (cb) => listen('document-path-changed', cb),
 

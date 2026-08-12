@@ -341,6 +341,15 @@ function pushThemeAll() {
   for (const session of sessions.values()) send(session, 'set-theme', payload);
 }
 
+// Appearance is applied by flipping nativeTheme, which the stylesheets pick up
+// through their `prefers-color-scheme` blocks. Chromium updates the media
+// query's *value* in the renderer but does not dispatch a `change` event for
+// it, so anything that has to react in script (mermaid diagrams bake their
+// palette into the generated SVG) needs an explicit nudge.
+nativeTheme.on('updated', () => {
+  for (const session of sessions.values()) send(session, 'appearance-changed');
+});
+
 const actions = {
   newWindow: () => createWindow(),
   focusWindow: (id) => focusSessionWindow(sessions.get(id)),
@@ -1045,8 +1054,10 @@ function pageSizeForWidth() {
 
 async function doExportPDF(session) {
   if (!session || session.win.isDestroyed()) return;
-  // Ensure the rendered preview is showing (not the source editor) before print.
-  await ask(session, 'prepare-export', { fallback: true });
+  // Ensure the rendered preview is showing (not the source editor) before print,
+  // and that any mermaid diagrams have finished drawing. Diagrams are drawn
+  // asynchronously, so allow more time than a plain content request.
+  await ask(session, 'prepare-export', { fallback: true, timeoutMs: 20000 });
 
   const suggested = session.currentPath
     ? session.currentPath.replace(/\.[^.]+$/, '.pdf')

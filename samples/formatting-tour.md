@@ -57,6 +57,28 @@ def fib(n):
 >
 > Themes control the page, the type, and the source editor — Folio just wires it together.
 
+## Diagrams
+
+A ` ```mermaid ` fence is drawn as a diagram instead of a code block.
+
+```mermaid
+graph LR
+  A[Write Markdown] --> B{Preview?}
+  B -- yes --> C[Rendered page]
+  B -- no --> D[Source editor]
+  C --> E[Export to PDF]
+```
+
+```mermaid
+sequenceDiagram
+  participant U as You
+  participant F as Folio
+  U->>F: Open a document
+  F-->>U: Rendered preview
+  U->>F: Ctrl/Cmd+/
+  F-->>U: Source editor
+```
+
 ## Emoji
 
 Ship it :rocket:  ·  Looks good :sparkles:  ·  Coffee first :coffee:

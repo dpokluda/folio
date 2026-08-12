@@ -39,9 +39,15 @@ the CSS themes I already use "just work."
 - **Live features** via [markdown-it](https://github.com/markdown-it/markdown-it): tables,
   strikethrough, task lists, footnotes, autolinking, typographic replacements, and emoji.
 - **Syntax highlighting** of fenced code blocks with
-  [highlight.js](https://highlightjs.org/).
+  [highlight.js](https://highlightjs.org/). Each fence carries a **copy button** in its
+  top-right corner, revealed on hover (or keyboard focus), that puts the block on the
+  clipboard. It is excluded from PDF exports.
 - **Math typesetting** with [KaTeX](https://katex.org/): inline `$…$` and display `$$…$$`
   TeX formulas, rendered in the preview and included in PDF exports.
+- **Diagrams** with [Mermaid](https://mermaid.js.org/): a ` ```mermaid ` fenced block is
+  drawn as a flowchart, sequence, class, state, ER, Gantt, or pie diagram in the preview
+  and in PDF exports. Diagram colours follow the current Light/Dark appearance, and a
+  diagram that fails to parse falls back to its source plus the parser's message.
 - **Document outline** sidebar generated from headings.
 - **Folder mode / file explorer**, `File > Open Folder…` shows a browsable tree of the
   Markdown files in a directory. Click a file to render it; click a link between documents
@@ -483,5 +489,6 @@ build.js         esbuild bundler for the renderer
 - **[highlight.js](https://highlightjs.org/)**, fenced-code syntax highlighting.
 - **[KaTeX](https://katex.org/)**, math typesetting (via
   [@vscode/markdown-it-katex](https://github.com/microsoft/vscode-markdown-it-katex)).
+- **[Mermaid](https://mermaid.js.org/)**, diagrams from ` ```mermaid ` code fences.
 - The **[Fluent](https://github.com/li3zhen1/Fluent-Typora)** theme, on which the bundled
   Fluent variants are based.

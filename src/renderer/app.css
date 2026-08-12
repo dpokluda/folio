@@ -96,6 +96,110 @@ body {
   scrollbar-width: thin;
 }
 
+/* --- mermaid diagrams -----------------------------------------------------
+   Rendered from ```mermaid fences into an inline SVG (see renderer.js). The
+   SVG carries its own colours from the mermaid theme; all that is needed here
+   is block layout, centring, and a cap so a wide diagram scales down to the
+   page instead of overflowing it. */
+#write .folio-mermaid {
+  margin: 0 0 1.4em;
+  text-align: center;
+  overflow-x: auto;
+  -webkit-text-stroke: 0; /* diagram labels are not weight-compensated */
+}
+
+#write .folio-mermaid > svg {
+  max-width: 100%;
+  height: auto;
+}
+
+/* A diagram that failed to parse falls back to its source plus the parser's
+   message, styled like an inline warning rather than a broken image. */
+#write .folio-mermaid.folio-mermaid-error {
+  text-align: left;
+}
+
+#write .folio-mermaid .folio-mermaid-message {
+  margin: 6px 0 0;
+  /* The parser points at the offending column with a caret on its own line, so
+     the message only reads correctly in a monospace font with its newlines and
+     leading runs of spaces preserved. */
+  font-family: var(--mono-font, ui-monospace, "SFMono-Regular", "Cascadia Code", Menlo, Consolas, monospace);
+  font-size: 0.8em;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  color: #b31d28;
+  -webkit-text-stroke: 0;
+}
+
+/* --- code fence copy button ----------------------------------------------
+   An icon-only button overlaid in the fence's top-right corner, revealed on
+   hover or keyboard focus. The themes don't position `.md-fences`, so making
+   it the containing block here is safe; fences also don't scroll (long lines
+   overflow visibly), so the button stays put without a wrapper element. */
+#write pre.md-fences {
+  position: relative;
+}
+
+#write .folio-copy {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  margin: 0;
+  box-sizing: border-box;
+  color: #57606a;
+  background: rgba(246, 248, 250, 0.94);
+  border: 1px solid rgba(140, 149, 159, 0.35);
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-text-stroke: 0;
+}
+
+/* Revealed by hovering the fence. The button sits inside the <pre>, so it can
+   never be hovered without the fence being hovered too — an invisible button
+   is therefore never clickable. Keyboard focus reveals it independently. */
+#write pre.md-fences:hover > .folio-copy,
+#write .folio-copy:focus-visible {
+  opacity: 1;
+}
+
+#write .folio-copy:hover {
+  color: #24292f;
+  border-color: rgba(140, 149, 159, 0.7);
+}
+
+#write .folio-copy svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+  pointer-events: none;
+}
+
+/* Confirmation states stay visible for their whole timeout, even if the
+   pointer has already left the fence. */
+#write .folio-copy.folio-copy-done {
+  opacity: 1;
+  color: #1a7f37;
+  border-color: rgba(26, 127, 55, 0.45);
+}
+
+#write .folio-copy.folio-copy-failed {
+  opacity: 1;
+  color: #b31d28;
+  border-color: rgba(179, 29, 40, 0.45);
+}
+
 /* --- source editor host -------------------------------------------------- */
 /* The theme paints #typora-source white in source mode (.typora-sourceview-on);
    we just make it fill the pane and host the CodeMirror scroller. */
@@ -662,6 +766,30 @@ body {
     border-color: rgba(110, 118, 129, 0.3);
   }
 
+  /* --- mermaid parse-failure message --- */
+  #write .folio-mermaid .folio-mermaid-message {
+    color: #f85149;
+  }
+
+  /* --- code fence copy button --- */
+  #write .folio-copy {
+    color: #8b949e;
+    background: rgba(28, 31, 36, 0.94);
+    border-color: rgba(110, 118, 129, 0.4);
+  }
+  #write .folio-copy:hover {
+    color: #e6edf3;
+    border-color: rgba(110, 118, 129, 0.8);
+  }
+  #write .folio-copy.folio-copy-done {
+    color: #3fb950;
+    border-color: rgba(63, 185, 80, 0.5);
+  }
+  #write .folio-copy.folio-copy-failed {
+    color: #f85149;
+    border-color: rgba(248, 81, 73, 0.5);
+  }
+
   /* --- outline sidebar --- */
   #folio-outline {
     background: #17181b;
@@ -788,4 +916,16 @@ body {
   .hljs-link { color: #ffa657; }
   .hljs-deletion { color: #ffdcd7; background: #67060c; }
   .hljs-addition { color: #aff5b4; background: #033a16; }
+}
+
+/* ==========================================================================
+   Print / PDF export.
+
+   `File ▸ Export to PDF` prints the live preview, so purely interactive
+   chrome has to be taken out of the printed page.
+   ========================================================================== */
+@media print {
+  #write .folio-copy {
+    display: none;
+  }
 }
