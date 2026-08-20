@@ -77,17 +77,34 @@
     },
     "win": {
       "target": "nsis",
-      "icon": "build/icons/icon.ico"
+      "icon": "build/icons/icon.ico",
+      "fileAssociations": [
+        {
+          "ext": ["md", "markdown", "mdown", "mkd", "mkdn"],
+          "name": "Folio.Markdown",
+          "description": "Markdown Document",
+          "mimeType": "text/markdown",
+          "role": "Editor",
+          "icon": "build/icons/document.ico"
+        }
+      ]
     },
     "mac": {
       "target": "dmg",
       "category": "public.app-category.productivity",
       "icon": "build/icons/icon.icns",
+      "extraResources": [
+        {
+          "from": "build/icons/document.icns",
+          "to": "document.icns"
+        }
+      ],
       "extendInfo": {
         "CFBundleDocumentTypes": [
           {
             "CFBundleTypeName": "Markdown Document",
             "CFBundleTypeRole": "Editor",
+            "CFBundleTypeIconFile": "document.icns",
             "LSHandlerRank": "Alternate",
             "LSItemContentTypes": ["net.daringfireball.markdown", "public.plain-text"]
           },

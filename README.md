@@ -145,6 +145,30 @@ npm run dist:linux    # Linux (AppImage + deb)
 
 Build artifacts are written to `release/`.
 
+`npm run dist` and the platform-specific variant for the machine you're on are
+equivalent — electron-builder defaults to the host platform. The `:win` / `:mac`
+/ `:linux` scripts only matter when cross-targeting (which needs extra tooling,
+e.g. Wine to build a Windows installer from macOS or Linux).
+
+#### One-shot rebuild
+
+`scripts/build.ps1` chains the steps of a full rebuild in the right order. It
+needs PowerShell 7+ (`pwsh`), which runs on Windows, macOS and Linux:
+
+```sh
+pwsh scripts/build.ps1                   # npm run icons, then npm run dist
+pwsh scripts/build.ps1 -Clean            # wipe release/ first
+pwsh scripts/build.ps1 -Install          # npm install first (after dep changes)
+pwsh scripts/build.ps1 -SkipIcons        # skip icon regeneration
+pwsh scripts/build.ps1 -Platform linux   # cross-target
+pwsh scripts/build.ps1 -?                # full help
+```
+
+It's pure orchestration — the npm scripts stay the source of truth and remain
+usable on their own. Note that `-Clean` removes the whole `release/` directory,
+whereas `npm run dist` only clears `release/*-unpacked` and leaves older
+installers in place.
+
 #### Linux packaging prerequisites
 
 On Linux, packaging the `.deb` and running the resulting `.AppImage` need a few
@@ -172,11 +196,19 @@ If you only want the `.AppImage` and not the `.deb`, you can skip the build with
 only `libfuse.so.2` to *run* the result).
 
 
-#### App icon
+#### App & document icons
 
-The app icon lives in `build/icons/` as an editable `icon.svg` (a light rounded
-tile with a stylized **F** and a teal editor caret). The packaged `.ico`
-(Windows), `.icns` (macOS), and `.png` (Linux) files are generated from it with:
+`build/icons/` holds two editable SVG sources:
+
+- **`icon.svg`** — the app icon (a light rounded tile with a stylized **F** and a
+  teal editor caret). Used for the executable, taskbar, and app bundle.
+- **`document.svg`** — the *Markdown document* icon (a sheet of paper with a
+  folded upper-right corner and the Folio glyph inside). Used for `.md` files in
+  Explorer/Finder once Folio is registered as their handler, so associating
+  Markdown with Folio doesn't turn every `.md` file into an app-tile icon.
+
+The packaged `.ico` (Windows), `.icns` (macOS), and `.png` (Linux) files are
+generated from both SVGs with:
 
 ```sh
 npm run icons
@@ -184,7 +216,24 @@ npm run icons
 
 (Requires the dev-only `sharp` and `png2icons` packages, installed by
 `npm install`.) The generated files are committed, so this only needs re-running
-when the SVG changes.
+when an SVG changes.
+
+#### Markdown file associations
+
+The Windows installer registers a `Folio.Markdown` file type for `.md`,
+`.markdown`, `.mdown`, `.mkd`, and `.mkdn` (see `build.win.fileAssociations` in
+`package.json`). That file type carries `document.ico` as its `DefaultIcon`, so
+Markdown files get the document icon — not Folio's app icon — and Explorer shows
+them as *Markdown Document*.
+
+If you previously pointed `.md` at Folio yourself via **Open with → Always use
+this app**, Windows stored a per-user override that still resolves to the raw
+executable icon. Re-run **Open with → Choose another app → Folio → Always** once
+after installing a build that has the association baked in; Windows then picks
+the registered `Folio.Markdown` type and the document icon appears.
+
+On macOS the same artwork ships as `document.icns` and is referenced from the
+`Markdown Document` entry in `CFBundleDocumentTypes`.
 
 #### Windows packaging note
 
@@ -471,6 +520,8 @@ src/
     app.css      app chrome + CodeMirror→Typora compat + highlight.js token colors
 themes/          Typora-compatible themes: base.css + per-family folders (fluent/ github/ word/)
 samples/         welcome.md demo document
+build/icons/     icon.svg (app) + document.svg (.md files) and their generated .ico/.icns/.png
+scripts/         build/packaging helpers (build.ps1, generate-icons.js, …)
 build.js         esbuild bundler for the renderer
 ```
 
