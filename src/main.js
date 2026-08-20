@@ -6,6 +6,22 @@ const { pathToFileURL } = require('url');
 const { Store } = require('./store');
 const { buildMenu } = require('./menu');
 
+// ---------------------------------------------------------------------------
+// Text rendering: match Typora's lighter, smoother glyphs.
+//
+// Chromium defaults to subpixel (ClearType/LCD) antialiasing on Windows, which
+// renders text visibly heavier and grainier than Typora, whose core stylesheet
+// asks for grayscale antialiasing. CSS alone cannot fix this: Blink only
+// honours `-webkit-font-smoothing` on macOS/Linux, so on Windows the property
+// is silently ignored (verified by rendering a probe page in this exact
+// Electron build — the declaration made no difference to the rasterised
+// pixels, while this switch flipped every sample to grayscale).
+//
+// Must be set before the app is ready, since it is read during GPU/compositor
+// startup.
+// ---------------------------------------------------------------------------
+app.commandLine.appendSwitch('disable-lcd-text');
+
 const store = new Store();
 
 // ---------------------------------------------------------------------------

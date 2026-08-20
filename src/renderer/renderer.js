@@ -6,9 +6,10 @@ import taskLists from 'markdown-it-task-lists';
 import footnote from 'markdown-it-footnote';
 import { full as emojiPlugin } from 'markdown-it-emoji';
 import katexPlugin from '@vscode/markdown-it-katex';
-import hljs from 'highlight.js';
 import mermaid from 'mermaid';
 import DOMPurify from 'dompurify';
+
+import { highlightFence } from './highlight.js';
 
 import { EditorState, EditorSelection, Compartment, Prec } from '@codemirror/state';
 import { EditorView, keymap, highlightSpecialChars, drawSelection, lineNumbers } from '@codemirror/view';
@@ -31,15 +32,10 @@ const md = new MarkdownIt({
   typographer: true,
   breaks: false,
   highlight(str, lang) {
-    if (lang && hljs.getLanguage(lang)) {
-      try {
-        const out = hljs.highlight(str, { language: lang, ignoreIllegals: true }).value;
-        return `<pre class="md-fences hljs"><code class="hljs language-${lang}">${out}</code></pre>`;
-      } catch (_) {
-        /* fall through */
-      }
-    }
-    return `<pre class="md-fences hljs"><code class="hljs">${md.utils.escapeHtml(str)}</code></pre>`;
+    // Tokens are emitted as CodeMirror `.cm-*` spans, which the Typora themes
+    // already colour from their --color-cm-* palette (see highlight.js).
+    const cls = lang ? ` language-${md.utils.escapeHtml(lang.trim().split(/\s+/)[0])}` : '';
+    return `<pre class="md-fences"><code class="cm-s-inner${cls}">${highlightFence(str, lang)}</code></pre>`;
   },
 })
   .use(taskLists, { enabled: true })
@@ -469,7 +465,7 @@ function renderMermaidError(el, code, err) {
   const message = (err && (err.message || err.str)) || 'Invalid diagram';
   el.classList.add('folio-mermaid-error');
   el.innerHTML =
-    `<pre class="md-fences hljs"><code class="hljs">${md.utils.escapeHtml(code)}</code></pre>` +
+    `<pre class="md-fences"><code class="cm-s-inner">${md.utils.escapeHtml(code)}</code></pre>` +
     `<p class="folio-mermaid-message">${md.utils.escapeHtml(String(message))}</p>`;
   // Rendered after the main pass, so it misses the document-wide sweep.
   addCopyButton(el.querySelector('pre.md-fences'));

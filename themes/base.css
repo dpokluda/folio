@@ -450,8 +450,7 @@ code {
    painted on every wrapped line box, showing as stray horizontal lines between
    code lines. Reset it so only the outer fence frames the block. */
 .md-fences code,
-.md-fences tt,
-.md-fences .hljs {
+.md-fences tt {
     border: 0;
     background-color: transparent;
     padding: 0;
