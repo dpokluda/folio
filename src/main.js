@@ -473,10 +473,12 @@ function copyDocumentPath() {
 
 // Whether the "Install 'folio' Command in PATH" menu item should be offered.
 // macOS: always (the .app bundle isn't on PATH). Linux: only when running as an
-// AppImage (the single-file executable we can symlink to). Windows: never — a
-// packaged install already puts Folio on PATH.
+// AppImage (the single-file executable we can symlink to). Windows: always — the
+// NSIS installer does NOT touch PATH, so a packaged install is not reachable
+// from a terminal until a shim is dropped somewhere on PATH.
 function canInstallShellCommand() {
   if (process.platform === 'darwin') return true;
+  if (process.platform === 'win32') return true;
   if (process.platform === 'linux') return !!process.env.APPIMAGE;
   return false;
 }
@@ -491,6 +493,8 @@ function installShellCommand() {
   try {
     if (process.platform === 'darwin') {
       installShellCommandMac(parentWin);
+    } else if (process.platform === 'win32') {
+      installShellCommandWindows(parentWin);
     } else if (process.platform === 'linux') {
       installShellCommandLinux(parentWin);
     } else {
@@ -498,7 +502,7 @@ function installShellCommand() {
         type: 'info',
         title: 'Install Command',
         message: "Installing the 'folio' command isn't supported on this platform.",
-        detail: 'On Windows a packaged install already places Folio on your PATH.',
+        detail: 'Folio can only install a launcher on macOS, Windows and Linux.',
         buttons: ['OK'],
       });
     }
@@ -560,6 +564,108 @@ function installShellCommandMac(parentWin) {
     detail:
       `You can now run:\n\n    folio path/to/file.md\n    folio path/to/folder\n\n` +
       `You may need to open a new terminal, and make sure ${binDir} is on your PATH.`,
+    buttons: ['OK'],
+  });
+}
+
+// Whether `dir` is already listed in this process's PATH. Electron inherits its
+// environment from the shell/Explorer that launched it, so this is the same PATH
+// a newly opened terminal will see. Comparison is case-insensitive and ignores
+// surrounding quotes and trailing separators, which real PATH entries often have.
+function isOnPath(dir) {
+  const norm = (p) => path.resolve(p).replace(/[\\/]+$/, '').toLowerCase();
+  let wanted;
+  try {
+    wanted = norm(dir);
+  } catch (_) {
+    return false;
+  }
+  return String(process.env.PATH || '')
+    .split(path.delimiter)
+    .some((entry) => {
+      const cleaned = entry.trim().replace(/^"+|"+$/g, '');
+      if (!cleaned) return false;
+      try {
+        return norm(cleaned) === wanted;
+      } catch (_) {
+        return false;
+      }
+    });
+}
+
+// Windows: drop a small `folio.cmd` shim into a directory that is already on
+// PATH. The preferred target is %LOCALAPPDATA%\Microsoft\WindowsApps, which
+// Windows puts on the default user PATH (10/1709+) and which is writable without
+// administrator rights — so no PATH edit, no elevation and no sign-out are
+// needed, and a freshly opened terminal picks the command up immediately.
+//
+// Why not let the installer do it: the NSIS package is a one-click installer
+// with no options page on which to ask consent, editing PATH from NSIS risks
+// truncating a long PATH at NSIS's 1024-character string limit, and it wouldn't
+// help anyone running an unpackaged or portable build.
+//
+// `start ""` is what keeps the shim from blocking the terminal: Folio is a GUI
+// app, so the shim hands off and returns to the prompt straight away. The empty
+// first argument fills `start`'s window-title slot — without it `start` would
+// swallow the quoted executable path as a title instead of running it.
+function installShellCommandWindows(parentWin) {
+  const localAppData = process.env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+  const winApps = path.join(localAppData, 'Microsoft', 'WindowsApps');
+  // Fall back to our own directory when WindowsApps isn't on PATH (older or
+  // heavily customised setups); the user then has to add it to PATH once.
+  const preferred = isOnPath(winApps);
+  const binDir = preferred ? winApps : path.join(localAppData, 'Folio', 'bin');
+  const target = path.join(binDir, 'folio.cmd');
+
+  // A literal % has to be doubled inside a batch file. A Windows path can never
+  // contain a double quote, so quoting the executable is safe as-is.
+  const exe = process.execPath.replace(/%/g, '%%');
+  const script = `@echo off\r\nstart "" "${exe}" %*\r\n`;
+
+  const q = (s) => s.replace(/'/g, "''"); // single-quoted PowerShell literal
+  const manualCommand =
+    `New-Item -ItemType Directory -Force -Path '${q(binDir)}' | Out-Null; ` +
+    `Set-Content -Path '${q(target)}' -Value '@echo off', 'start "" "${q(exe)}" %*'`;
+
+  try {
+    fs.mkdirSync(binDir, { recursive: true });
+    fs.writeFileSync(target, script);
+  } catch (err) {
+    if (err && (err.code === 'EACCES' || err.code === 'EPERM')) {
+      const response = dialog.showMessageBoxSync(parentWin, permissionDialogOptions(target, manualCommand));
+      if (response === 0) clipboard.writeText(manualCommand);
+      return;
+    }
+    throw err;
+  }
+
+  if (!preferred) {
+    const response = dialog.showMessageBoxSync(parentWin, {
+      type: 'info',
+      title: 'Command Installed',
+      message: "The 'folio' command was installed, but its folder isn't on your PATH yet.",
+      detail:
+        `Folio wrote ${target}.\n\n` +
+        `Add this folder to your PATH to finish:\n\n    ${binDir}\n\n` +
+        `Press Win+R, run "rundll32 sysdm.cpl,EditEnvironmentVariables", edit the user "Path" ` +
+        `variable and add the folder above. Then open a new terminal and run:\n\n` +
+        `    folio path/to/file.md`,
+      buttons: ['Copy Folder Path', 'OK'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response === 0) clipboard.writeText(binDir);
+    return;
+  }
+
+  dialog.showMessageBox(parentWin, {
+    type: 'info',
+    title: 'Command Installed',
+    message: "The 'folio' command was installed.",
+    detail:
+      `A launcher was created at ${target}.\n\nYou can now run:\n\n` +
+      `    folio path/to/file.md\n    folio path/to/folder\n\n` +
+      `Open a new terminal first — an already-running one won't see it yet.`,
     buttons: ['OK'],
   });
 }

@@ -300,9 +300,8 @@ again.
 
   **The `folio` command on macOS**, a packaged macOS build installs as
   `/Applications/Folio.app`, and a `.app` bundle is a folder rather than a plain
-  executable, so it isn't on your `PATH` by default (on Windows the installer already
-  puts `Folio` on `PATH`). To get a `folio` command in your terminal, use
-  `File > Install 'folio' Command in PATH…`. This writes a small wrapper to
+  executable, so it isn't on your `PATH` by default. To get a `folio` command in your
+  terminal, use `File > Install 'folio' Command in PATH…`. This writes a small wrapper to
   `/usr/local/bin/folio`, after which you can run:
 
   ```sh
@@ -327,6 +326,26 @@ again.
   With no setup at all, `open -a Folio path/to/notes.md` also launches an installed Folio
   and opens the file — but only for files, and only reliably when Folio isn't already
   running.
+
+  **The `folio` command on Windows**, the installer deliberately does **not** modify your
+  `PATH`, so a fresh install isn't reachable from a terminal. Use
+  `File > Install 'folio' Command in PATH…` to set it up. This writes a small `folio.cmd`
+  launcher into `%LOCALAPPDATA%\Microsoft\WindowsApps`, a folder Windows already keeps on
+  your user `PATH`, after which you can run:
+
+  ```powershell
+  folio path\to\notes.md
+  folio path\to\notes-folder
+  ```
+
+  No administrator rights, no `PATH` editing and no sign-out are needed — just open a new
+  terminal, since an already-running one won't pick the command up. It works from
+  PowerShell and `cmd` alike. The launcher uses `start` so it hands off to the GUI and
+  returns to your prompt immediately instead of blocking the terminal.
+
+  On the rare setup where `WindowsApps` isn't on `PATH`, Folio writes the launcher to
+  `%LOCALAPPDATA%\Folio\bin` instead and tells you to add that one folder to your `PATH`.
+  To uninstall the command, just delete `folio.cmd`.
 
   **The `folio` command on Linux**, a packaged Linux build ships as an AppImage, which is a
   single executable file that isn't on your `PATH` on its own. Launch Folio from the
