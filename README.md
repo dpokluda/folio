@@ -237,17 +237,15 @@ On macOS the same artwork ships as `document.icns` and is referenced from the
 
 #### Windows packaging note
 
-electron-builder downloads a `winCodeSign` bundle that contains macOS symlinks.
-Extracting those symlinks on Windows normally requires Administrator rights or
-**Developer Mode**, and without them the build fails with *"Cannot create
-symbolic link : A required privilege is not held by the client."* This is an
-electron-builder/Windows limitation, not a Folio bug.
+Older electron-builder releases could fail on Windows with *"Cannot create
+symbolic link : A required privilege is not held by the client"* while
+extracting the `winCodeSign` bundle, which contains macOS symlinks. Folio used
+to pre-extract that bundle via a `prepare:wincodesign` step.
 
-Folio works around it automatically: `npm run dist` / `npm run dist:win` first
-run `scripts/prepare-wincodesign.js`, which pre-extracts that bundle with
-symlink creation disabled into electron-builder's cache, so no Administrator
-rights or Developer Mode are needed. (The macOS symlinks are irrelevant to a
-Windows build.)
+That workaround is gone. electron-builder 26 tolerates the symlink failure while
+unpacking, downloads its own 7-Zip binary on demand, and only fetches the
+`winCodeSign` bundle when signing is actually configured — so an unsigned
+Windows build needs neither Administrator rights nor Developer Mode.
 
 #### Windows "Unable to commit changes" (rcedit) note
 
