@@ -34,7 +34,7 @@ the CSS themes I already use "just work."
 - **Themed source-code editor** (CodeMirror 6) under `#typora-source`, so a selected theme
   styles the editor too, including the grey-bar-free source-mode background.
 - **Typora-compatible theming** on three independent axes, **Style** (Fluent, GitHub,
-  Microsoft Word), **Appearance** (Light, Dark) and **Page width** (Dynamic, A4, US Letter),
+  Microsoft Word), **Appearance** (Light, Dark, System) and **Page width** (Dynamic, A4, US Letter),
   chosen from the **Themes** menu and remembered between launches.
 - **Live features** via [markdown-it](https://github.com/markdown-it/markdown-it): tables,
   strikethrough, task lists, footnotes, autolinking, typographic replacements, and emoji.
@@ -415,7 +415,7 @@ again.
     `$…$` for inline formulas or `$$…$$` for display equations.
   - **Headings** `Ctrl/Cmd+1` … `Ctrl/Cmd+6` set the current line(s) to that heading level.
 - **Switch themes**, the **Themes** menu offers three independent choices: a **Style**
-  (Fluent, GitHub, Microsoft Word), an **Appearance** (Light, Dark) and a **Page width**
+  (Fluent, GitHub, Microsoft Word), an **Appearance** (Light, Dark, System) and a **Page width**
   (Dynamic, A4, US Letter). Both the preview and the source editor restyle instantly; your
   selection is remembered.
 - **Outline**, `View > Toggle Outline` (`Ctrl/Cmd+Alt+O`), or the **Outline** button in
@@ -454,7 +454,7 @@ active look:
 | Axis           | Options                              | What it controls                                   |
 | -------------- | ----------------------------------- | -------------------------------------------------- |
 | **Style**      | Fluent · GitHub · Microsoft Word    | Fonts, colours and heading treatment               |
-| **Appearance** | Light · Dark                        | Light or dark palette (whole app, including chrome) |
+| **Appearance** | Light · Dark · System               | Light or dark palette (whole app, including chrome); System follows the OS |
 | **Page width** | Dynamic · A4 · US Letter            | The writing column: window-filling or a fixed sheet |
 
 That's 3 × 2 × 3 = 18 combinations from a handful of small stylesheets, rather than 18
@@ -484,7 +484,10 @@ and Word add a thin overlay that overrides the palette and typography.
 
 **Appearance** is not a file swap: Folio flips Chromium's `prefers-color-scheme` via
 Electron's `nativeTheme`, so every layer's `@media (prefers-color-scheme: dark)` block (and
-Folio's own chrome + syntax colours) switches to its dark palette together.
+Folio's own chrome + syntax colours) switches to its dark palette together. **System** sets
+`nativeTheme.themeSource` to `'system'`, so Folio tracks the OS setting live — including
+automatic switches such as macOS's *Auto* appearance or a scheduled light/dark change on
+Windows (e.g. via PowerToys) — and re-renders Mermaid diagrams when it flips.
 
 ### Add your own Typora themes
 

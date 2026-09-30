@@ -132,13 +132,15 @@ function appIconPath() {
 //     word/    word.css    a4.css  dynamic.css  us-letter.css  fonts/
 //
 // Fluent adds no family overlay — base.css already carries the Fluent palette —
-// so its folder holds only the page-width overlays. Appearance (light/dark) is
-// handled separately by flipping Chromium's prefers-color-scheme through
-// Electron's nativeTheme, which activates the dark palettes the stylesheets
-// already carry behind @media (prefers-color-scheme: dark).
+// so its folder holds only the page-width overlays. Appearance (light/dark/
+// system) is handled separately by flipping Chromium's prefers-color-scheme
+// through Electron's nativeTheme, which activates the dark palettes the
+// stylesheets already carry behind @media (prefers-color-scheme: dark).
+// 'system' hands the choice to the OS and follows it live (e.g. macOS Auto
+// appearance or a scheduled Windows light/dark switch).
 // ---------------------------------------------------------------------------
 const STYLE_FAMILIES = ['fluent', 'github', 'word'];
-const APPEARANCES = ['light', 'dark'];
+const APPEARANCES = ['light', 'dark', 'system'];
 const PAGE_WIDTHS = ['dynamic', 'a4', 'letter'];
 
 // Family look overlays on top of base.css. Fluent needs none (base is Fluent).
@@ -172,7 +174,8 @@ function composeThemeFiles() {
 }
 
 function applyAppearance() {
-  nativeTheme.themeSource = store.get('appearance') === 'dark' ? 'dark' : 'light';
+  const appearance = store.get('appearance');
+  nativeTheme.themeSource = APPEARANCES.includes(appearance) ? appearance : 'light';
 }
 
 // ---------------------------------------------------------------------------

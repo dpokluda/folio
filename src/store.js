@@ -8,7 +8,7 @@ const DEFAULTS = {
   // Three-axis theming: a Style family, an Appearance, and a Page width are
   // composed at runtime into a stack of theme stylesheets.
   styleFamily: 'fluent', // 'fluent' | 'github' | 'word'
-  appearance: 'light', // 'light' | 'dark'
+  appearance: 'light', // 'light' | 'dark' | 'system' (follow the OS)
   pageWidth: 'dynamic', // 'dynamic' | 'a4' | 'letter'
   recentFiles: [],
   window: { width: 1100, height: 820 },
