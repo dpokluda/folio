@@ -33,10 +33,13 @@ Let `V` be the validated source product version and `A` be `x64` or `arm64`.
 | Target | Required files |
 | ------ | -------------- |
 | Windows | `Folio-V-windows-A.zip`, `Folio-V-windows-A-setup.exe` |
-| Linux | `Folio-V-linux-A.tar.gz`, `Folio-V-linux-A.AppImage` |
+| Linux x64 | `Folio-V-linux-x64.tar.gz`, `Folio-V-linux-x86_64.AppImage` |
+| Linux arm64 | `Folio-V-linux-arm64.tar.gz`, `Folio-V-linux-arm64.AppImage` |
 | macOS | `Folio-V-macos-A.tar.gz`, `Folio-V-macos-A.dmg` |
 
 Use explicit per-platform `artifactName` configuration rather than depending on builder's varying default filenames.
+For AppImage only, electron-builder expands x64's architecture spelling as `x86_64`, so that file is `Folio-V-linux-x86_64.AppImage`.
+The corresponding tarball and workflow target remain `x64`; arm64 filenames are unchanged.
 Only the custom setup filename is supplied by the Inno integration.
 Other local outputs may exist, but only these twelve payload files enter the six automated target bundles.
 

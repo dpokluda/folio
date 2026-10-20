@@ -4,7 +4,7 @@
 
 **Created**: 2026-10-19
 
-**Status**: Implementation in progress; core source changes and local macOS arm64 checks are complete, while live CI and remaining native qualification are pending.
+**Status**: Implementation in progress; the first live CI run passed three targets and exposed three platform-specific failures. Targeted fixes are local; a complete successful CI run and remaining native qualification are pending.
 
 **Input**: First update Folio's source-controlled product version to 1.0 and create a simple consumer-specific `README.md` that is distributed with the application.
 These are product changes, not responsibilities of the pipeline.

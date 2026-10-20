@@ -124,13 +124,20 @@ test('package names cover exactly six native targets and twelve distinct files',
     for (const arch of ['x64', 'arm64']) {
       const pair = packageNames('1.1.0', platform, arch);
       assert.equal(pair.length, 2);
-      assert.ok(pair.every((name) => name.startsWith(`Folio-1.1.0-${platform}-${arch}`)));
+      assert.ok(pair[0].startsWith(`Folio-1.1.0-${platform}-${arch}`));
+      const imageArch = platform === 'linux' && arch === 'x64' ? 'x86_64' : arch;
+      assert.ok(pair[1].startsWith(`Folio-1.1.0-${platform}-${imageArch}`));
       names.push(...pair);
     }
   }
   assert.equal(new Set(names).size, 12);
   assert.deepEqual(packageNames('1.0.0', 'windows', 'arm64'),
     ['Folio-1.0.0-windows-arm64.zip', 'Folio-1.0.0-windows-arm64-setup.exe']);
+});
+
+test('AppImage uses the builder x86_64 spelling while the archive target stays x64', () => {
+  assert.deepEqual(packageNames('1.0.0', 'linux', 'x64'),
+    ['Folio-1.0.0-linux-x64.tar.gz', 'Folio-1.0.0-linux-x86_64.AppImage']);
 });
 
 test('package names reject unknown targets, unsafe versions and excessive filenames', () => {
@@ -326,7 +333,7 @@ test('Windows stateful verification guard refuses existing installations, handle
   ]) assert.equal(hasWindowsRegistration({ ...clean, ...changed }), true);
 });
 
-async function payloadFixture(t, { platform = 'macos', arch = 'arm64', asarFont = false } = {}) {
+async function payloadFixture(t, { platform = process.platform === 'win32' ? 'windows' : 'macos', arch = 'arm64', asarFont = false } = {}) {
   const asar = require('@electron/asar');
   const f = fixture(t);
   const app = path.join(f.root, platform === 'macos' ? 'Folio.app' : 'application');
@@ -351,12 +358,14 @@ async function payloadFixture(t, { platform = 'macos', arch = 'arm64', asarFont 
   write(content, 'src/renderer/katex/katex.min.css', '@font-face { src: url(fonts/fixture.woff2) format("woff2"); }');
   if (asarFont) write(content, 'themes/word/fonts/nested/Aptos.ttf', 'Not a real font');
   await asar.createPackage(content, path.join(resources, 'app.asar'));
-  return { ...f, app, resources, executable, metadata: readMetadata(f.root) };
+  return { ...f, platform, app, resources, executable, metadata: readMetadata(f.root) };
 }
 
 test('verifier inspects complete payload bytes and target architecture, not filenames alone', async (t) => {
   const { inspectPayload } = require('../scripts/verify-packages');
-  for (const platform of ['windows', 'linux', 'macos']) {
+  // NTFS cannot model POSIX executable bits; Linux/macOS CI exercise those payloads natively.
+  const platforms = process.platform === 'win32' ? ['windows'] : ['windows', 'linux', 'macos'];
+  for (const platform of platforms) {
     const f = await payloadFixture(t, { platform });
     const result = inspectPayload(f.app, f.metadata, platform, 'arm64');
     assert.equal(result.executable, f.executable);
@@ -369,13 +378,24 @@ test('verifier inspects complete payload bytes and target architecture, not file
 test('verifier rejects missing assets and restricted fonts in either packaged theme copy', async (t) => {
   const { inspectPayload } = require('../scripts/verify-packages');
   const restricted = await payloadFixture(t, { asarFont: true });
-  assert.throws(() => inspectPayload(restricted.app, restricted.metadata, 'macos', 'arm64'), /font|ttf/i);
+  assert.throws(() => inspectPayload(restricted.app, restricted.metadata, restricted.platform, 'arm64'), /font|ttf/i);
   const f = await payloadFixture(t);
   write(f.resources, 'themes/word/fonts/nested/Aptos.ttf', 'Not a real font');
-  assert.throws(() => inspectPayload(f.app, f.metadata, 'macos', 'arm64'), /font|ttf/i);
+  assert.throws(() => inspectPayload(f.app, f.metadata, f.platform, 'arm64'), /font|ttf/i);
   fs.unlinkSync(path.join(f.resources, 'themes/word/fonts/nested/Aptos.ttf'));
   fs.unlinkSync(path.join(f.resources, 'themes/word/word.css'));
-  assert.throws(() => inspectPayload(f.app, f.metadata, 'macos', 'arm64'), /word\.css/);
+  assert.throws(() => inspectPayload(f.app, f.metadata, f.platform, 'arm64'), /word\.css/);
+});
+
+test('verifier rejects POSIX payloads without executable permissions', {
+  skip: process.platform === 'win32' ? 'Windows cannot represent POSIX executable permission bits.' : false,
+}, async (t) => {
+  const { inspectPayload } = require('../scripts/verify-packages');
+  for (const platform of ['linux', 'macos']) {
+    const f = await payloadFixture(t, { platform });
+    fs.chmodSync(f.executable, 0o644);
+    assert.throws(() => inspectPayload(f.app, f.metadata, platform, 'arm64'), /executable permissions/);
+  }
 });
 
 test('verifier stages exactly one valid pair and does not destroy prior output on an invalid pair', (t) => {
@@ -392,16 +412,30 @@ test('verifier stages exactly one valid pair and does not destroy prior output o
   assert.throws(() => stagePackages(files, f.root), /staging|target|artifacts/i);
 });
 
+test('verifier stages the native x64 archive with its x86_64-named AppImage', (t) => {
+  const { stagePackages } = require('../scripts/verify-packages');
+  const f = fixture(t);
+  const names = ['Folio-1.0.0-linux-x64.tar.gz', 'Folio-1.0.0-linux-x86_64.AppImage'];
+  const files = names.map((name) => write(f.root, `release/${name}`, 'Valid package fixture'));
+  const destination = path.join(f.root, 'release/artifacts/linux-x64');
+  stagePackages(files, destination);
+  assert.deepEqual(fs.readdirSync(destination).sort(), names.sort());
+});
+
 test('builder configuration preserves all formats and source-derived filename conventions', () => {
   const pkg = JSON.parse(fs.readFileSync(path.join(source, 'package.json'), 'utf8'));
   assert.equal(pkg.build.win.target, 'zip');
   assert.deepEqual(pkg.build.mac.target, ['dmg', 'tar.gz']);
   assert.deepEqual(pkg.build.linux.target, ['AppImage', 'tar.gz', 'deb']);
-  for (const [platform, key, extension] of [['windows', 'win', 'zip'], ['linux', 'linux', 'tar.gz'], ['macos', 'mac', 'tar.gz']]) {
+  for (const [platform, key, extension, index] of [
+    ['windows', 'win', 'zip', 0], ['linux', 'linux', 'tar.gz', 0], ['linux', 'linux', 'AppImage', 1],
+    ['macos', 'mac', 'tar.gz', 0], ['macos', 'mac', 'dmg', 1],
+  ]) {
     for (const arch of ['x64', 'arm64']) {
+      const expandedArch = extension === 'AppImage' && arch === 'x64' ? 'x86_64' : arch;
       const name = pkg.build[key].artifactName.replace('${productName}', 'Folio')
-        .replace('${version}', '1.1.0').replace('${arch}', arch).replace('${ext}', extension);
-      assert.equal(name, packageNames('1.1.0', platform, arch)[0]);
+        .replace('${version}', '1.1.0').replace('${arch}', expandedArch).replace('${ext}', extension);
+      assert.equal(name, packageNames('1.1.0', platform, arch)[index]);
     }
   }
   const iss = fs.readFileSync(path.join(source, 'build/windows/folio.iss'), 'utf8');

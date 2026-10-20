@@ -81,7 +81,8 @@ function packageNames(version, platform, arch) {
     throw new Error(`Unsupported package target: ${platform}-${arch}.`);
   }
   return FORMATS[platform].map((suffix) => {
-    const name = `Folio-${version}-${platform}-${arch}${suffix}`;
+    const artifactArch = platform === 'linux' && suffix === '.AppImage' && arch === 'x64' ? 'x86_64' : arch;
+    const name = `Folio-${version}-${platform}-${artifactArch}${suffix}`;
     if (name.length > 255) throw new Error(`Package filename exceeds the supported length: ${name}`);
     return name;
   });

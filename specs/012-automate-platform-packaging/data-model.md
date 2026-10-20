@@ -50,6 +50,7 @@ Only these target keys are accepted by the new verifier.
 Native machine identifiers are normalized explicitly: PE AMD64/ARM64, ELF x86-64/AArch64, and Mach-O x86_64/arm64.
 The primary application payload must match the requested target; a bootstrap installer's architecture is not that payload's architecture.
 Docker's `amd64` platform name corresponds to target `x64`.
+AppImage's filename spelling `x86_64` also corresponds to target `x64`; its tarball and workflow bundle still use `x64`.
 
 ## Workflow Run and Target Attempt
 

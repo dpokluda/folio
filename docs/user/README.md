@@ -8,6 +8,7 @@ Choose **Help > User Guide** to read this document inside the app.
 
 Choose the download for your operating system and processor.
 `x64` is for Intel/AMD PCs and Intel Macs; `arm64` is for Windows on Arm, Linux aarch64, and Apple Silicon Macs.
+Linux AppImages spell the x64 architecture `x86_64`; these names mean the same processor family.
 The bundled runtime requires Windows 10 or newer or macOS 12 or newer.
 Fedora 44 is the Linux compatibility reference; other distributions need compatible desktop libraries and are not qualified by a successful Ubuntu build alone.
 

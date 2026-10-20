@@ -124,6 +124,7 @@ A missing loader/library is a failure with its diagnostic preserved.
 This does not prove GUI startup or AppImage self-mounting.
 
 On a real Fedora 44 desktop of each architecture, separately:
+Use `x86_64` for the AppImage filename on x64; tarballs and target arguments use `x64`.
 
 ```sh
 chmod +x Folio-<version>-linux-<arch>.AppImage
@@ -247,12 +248,37 @@ These safety paths still require native Windows qualification.
 | ----- | --------------------- |
 | macOS arm64 package contents, signatures, native runtime, guide and local application flows | Pass on actual macOS 27.0.1; isolated test profiles and copied test-entry bootstrap where needed. This is not a claim that macOS 15 or the macOS 12 minimum was tested. |
 | Actual first-launch trust/SmartScreen/Gatekeeper approval | Not run against a freshly downloaded quarantined copy. |
-| macOS Intel package and desktop acceptance | Not run; no native Intel host in this session. |
-| Windows x64/arm64 compiler, installer and genuine standard-user checks | Not run; compiler/process fixtures and PowerShell syntax checks are not native Windows execution. |
-| Fedora 44 x64/arm64 container, FUSE mount and desktop acceptance | Not run; Docker and native Fedora desktops are unavailable on this host. |
+| macOS Intel package and desktop acceptance | Native macOS Intel CI package checks passed in the first run below; desktop acceptance is still not run. |
+| Windows x64/arm64 compiler, installer and genuine standard-user checks | The first native CI jobs failed contract tests before compiler provisioning; targeted fixes are local. Installer and genuine standard-user qualification remain pending. |
+| Fedora 44 x64/arm64 container, FUSE mount and desktop acceptance | Native Linux arm64 CI and Fedora 44 container probes passed. Linux x64 built both packages but failed the filename check before its Fedora probes. Desktop/FUSE-mount checks are not run. |
 | Preserved local Linux deb generation | Configuration retained and checked by fixtures; native generation not run. |
-| Complete twelve-payload content and license audit | Not run; only the macOS arm64 pair exists locally. |
-| Live six-job Actions run, upload and rerun behavior | Not run; no commit, push, merge, workflow dispatch, or repository setting change was authorized or performed. |
+| Complete twelve-payload content and license audit | Pending; the first run uploaded three target bundles, not the complete six-bundle set. |
+| Live six-job Actions run, upload and rerun behavior | Automatically triggered by the user's merge; first run completed with three successes and three failures. See the run evidence below. No fix was committed or pushed by the agent. |
 
 Tasks T031 through T037 remain unchecked until their required external/native evidence exists.
 The feature must not be marked fully implemented based only on these local results.
+
+### First merged GitHub Actions run: 2026-10-20
+
+The user's merge reached `main` at `9f820dfe3b73938006ee9164a395d028fbbc9d4f`.
+[Run 39429753648](https://github.com/dpokluda/folio/actions/runs/39429753648) was triggered by `push` and completed with conclusion `failure`.
+The local checkout and remote main matched that revision before the targeted CI fixes were prepared.
+
+| Target | Job ID | Result |
+| ------ | ------ | ------ |
+| Windows x64 | `118651402230` | Failed contract checks: nested ASAR paths used POSIX separators, and Windows fixtures attempted to represent POSIX executable modes. |
+| Windows arm64 | `118651401450` | Same two contract failures, before compiler provisioning or packaging. |
+| Linux x64 | `118651401650` | Built tar.gz and AppImage; verification expected `x64.AppImage` while builder correctly emitted `x86_64.AppImage`. |
+| Linux arm64 | `118651401862` | Passed build, actual-payload/runtime inspection, Fedora 44 probes, source immutability, and upload. |
+| macOS x64 | `118651401842` | Passed native Intel build, package/signature/runtime checks, source immutability, and upload. |
+| macOS arm64 | `118651401753` | Passed native arm64 build, package/signature/runtime checks, source immutability, and upload. |
+
+The API confirmed three unexpired, source-matching target bundles with artifact IDs `12267592524` (Linux arm64), `12268340906` (macOS x64), and `12267647199` (macOS arm64).
+These do not constitute the required twelve-file complete set.
+No successful target from this run may be substituted for another source revision's missing target.
+
+The Windows ASAR issue was reproduced using the real ASAR filesystem implementation with isolated Windows path semantics.
+Lookups now normalize paths for the host API while retaining portable archive-entry keys.
+Content fixtures use a filesystem-compatible format; a dedicated POSIX permission test remains enforced on Linux/macOS and explicitly reports unsupported NTFS modeling on Windows.
+The Linux package naming contract now matches builder's format-specific `x86_64` spelling for x64 AppImages, with regression coverage for both naming and staging.
+These are local fixes, not a claim that a subsequent CI run has passed.

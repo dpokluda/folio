@@ -91,6 +91,8 @@ function inspectPayload(app, metadata, platform, arch) {
   const archive = path.join(resources, 'app.asar');
   requireFile(archive);
   const entries = new Set(asar.listPackage(archive).map((file) => file.replaceAll('\\', '/').replace(/^\/+/, '')));
+  // ASAR lookup APIs split directories using the host separator, unlike our portable entry keys.
+  const statEntry = (file) => asar.statFile(archive, path.normalize(file));
   const packaged = JSON.parse(asar.extractFile(archive, 'package.json').toString('utf8'));
   if (packaged.version !== metadata.version || packaged.name !== metadata.name) {
     throw new Error(`Packaged application metadata does not match source version ${metadata.version}.`);
@@ -99,13 +101,13 @@ function inspectPayload(app, metadata, platform, arch) {
     'src/renderer/bundle.js', 'src/renderer/katex/katex.min.css',
     'samples/welcome.md', 'samples/formatting-tour.md', 'build/icons/icon.png',
     ...(platform === 'windows' ? ['build/icons/icon.ico'] : [])]) {
-    if (!entries.has(file) || !(asar.statFile(archive, file).size > 0)) {
+    if (!entries.has(file) || !(statEntry(file).size > 0)) {
       throw new Error(`Required application asset is missing or empty: ${file}`);
     }
   }
-  const katexCss = asar.extractFile(archive, 'src/renderer/katex/katex.min.css').toString('utf8');
+  const katexCss = asar.extractFile(archive, path.normalize('src/renderer/katex/katex.min.css')).toString('utf8');
   const fonts = [...katexCss.matchAll(/url\(["']?(fonts\/[^)"']+\.woff2)["']?\)/g)].map((match) => `src/renderer/katex/${match[1]}`);
-  if (!fonts.length || fonts.some((file) => !entries.has(file) || !(asar.statFile(archive, file).size > 0))) {
+  if (!fonts.length || fonts.some((file) => !entries.has(file) || !(statEntry(file).size > 0))) {
     throw new Error('Packaged offline KaTeX fonts referenced by its stylesheet are missing or empty.');
   }
   if (![...entries].some((file) => /^node_modules\/.+\/(licen[cs]e|copying)(?:[-.]|$)/i.test(file))) {
