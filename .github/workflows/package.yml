@@ -1,0 +1,166 @@
+name: Package Folio
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package ${{ matrix.platform }} ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows
+            node-platform: win32
+            arch: x64
+            runner-arch: X64
+            runner: windows-2022
+            script: dist:win
+          - platform: windows
+            node-platform: win32
+            arch: arm64
+            runner-arch: ARM64
+            runner: windows-11-arm
+            script: dist:win
+          - platform: linux
+            node-platform: linux
+            arch: x64
+            runner-arch: X64
+            runner: ubuntu-24.04
+            script: dist:linux
+          - platform: linux
+            node-platform: linux
+            arch: arm64
+            runner-arch: ARM64
+            runner: ubuntu-24.04-arm
+            script: dist:linux
+          - platform: macos
+            node-platform: darwin
+            arch: x64
+            runner-arch: X64
+            runner: macos-15-intel
+            script: dist:mac
+          - platform: macos
+            node-platform: darwin
+            arch: arm64
+            runner-arch: ARM64
+            runner: macos-15
+            script: dist:mac
+    defaults:
+      run:
+        shell: bash
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      npm_config_arch: ${{ matrix.arch }}
+      EXPECTED_PLATFORM: ${{ matrix.platform }}
+      EXPECTED_NODE_PLATFORM: ${{ matrix.node-platform }}
+      EXPECTED_ARCH: ${{ matrix.arch }}
+      EXPECTED_RUNNER_ARCH: ${{ matrix.runner-arch }}
+      DIST_SCRIPT: ${{ matrix.script }}
+    steps:
+      - name: Check out the triggering revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Set up native Node 24
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          architecture: ${{ matrix.arch }}
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Assert native runner and tool architecture
+        run: |
+          node <<'NODE'
+          const assert = require('node:assert/strict');
+          assert.equal(process.platform, process.env.EXPECTED_NODE_PLATFORM);
+          assert.equal(process.arch, process.env.EXPECTED_ARCH);
+          assert.equal(process.env.RUNNER_ARCH, process.env.EXPECTED_RUNNER_ARCH);
+          console.log({node: process.version, arch: process.arch, runner: process.env.RUNNER_ARCH});
+          NODE
+
+      - name: Install locked dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Read and validate source metadata
+        id: metadata
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const {version} = require('./scripts/package-metadata').readMetadata();
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,
+            `version=${version}\nsha12=${process.env.GITHUB_SHA.slice(0,12)}\n`);
+          NODE
+
+      - name: Run packaging contract checks
+        run: node --test tests/packaging.test.js
+
+      - name: Provision verified Inno Setup compiler
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./.github/scripts/setup-inno.ps1
+
+      - name: Build the native package pair
+        run: |
+          if [ "$EXPECTED_PLATFORM" = linux ]; then
+            npm run "$DIST_SCRIPT" -- AppImage tar.gz "--$EXPECTED_ARCH" --publish never
+          else
+            npm run "$DIST_SCRIPT" -- "--$EXPECTED_ARCH" --publish never
+          fi
+
+      - name: Inspect actual packages and native runtimes
+        run: |
+          if [ "$EXPECTED_PLATFORM" = linux ]; then
+            node scripts/verify-packages.js --platform "$EXPECTED_PLATFORM" --arch "$EXPECTED_ARCH" --directory release --fedora 44
+          else
+            node scripts/verify-packages.js --platform "$EXPECTED_PLATFORM" --arch "$EXPECTED_ARCH" --directory release
+          fi
+
+      - name: Confirm source inputs were not rewritten
+        run: git diff --exit-code -- package.json package-lock.json docs/user/README.md LICENSE
+
+      - name: Upload the validated target pair
+        id: artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: Folio-${{ steps.metadata.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ steps.metadata.outputs.sha12 }}-${{ github.run_id }}-a${{ github.run_attempt }}
+          path: release/artifacts/${{ matrix.platform }}-${{ matrix.arch }}/*
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: false
+
+      - name: Report provenance and verification boundary
+        env:
+          PRODUCT_VERSION: ${{ steps.metadata.outputs.version }}
+          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact-id }}
+          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const {packageNames} = require('./scripts/package-metadata');
+          const e = process.env;
+          const files = packageNames(e.PRODUCT_VERSION, e.EXPECTED_PLATFORM, e.EXPECTED_ARCH);
+          const summary = [
+            `## ${e.EXPECTED_PLATFORM}-${e.EXPECTED_ARCH}`,
+            `Product version: ${e.PRODUCT_VERSION}`,
+            `Source commit: ${e.GITHUB_SHA}`,
+            `Run: ${e.GITHUB_RUN_ID}; attempt: ${e.GITHUB_RUN_ATTEMPT}`,
+            `Runner: ${e.RUNNER_OS} ${e.RUNNER_ARCH}; image: ${e.ImageOS || e.RUNNER_OS} ${e.ImageVersion || 'see runner setup log'}`,
+            `Artifact: [${e.ARTIFACT_ID}](${e.ARTIFACT_URL})`,
+            ...files.map(file => `- ${file}`),
+            '',
+            'Actual package contents and native runtime probes passed.',
+            'Desktop acceptance, standard-user Windows behavior, and AppImage FUSE mounting require separate recorded checks.',
+            ''
+          ].join('\n');
+          fs.appendFileSync(e.GITHUB_STEP_SUMMARY, summary);
+          NODE

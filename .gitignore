@@ -17,3 +17,6 @@ themes/word/fonts/*.ttf
 .DS_Store
 Thumbs.db
 *.log
+*.tmp
+*.swp
+.env*

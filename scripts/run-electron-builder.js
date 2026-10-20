@@ -10,22 +10,15 @@
 // Any argv passed through (e.g. --win) is forwarded to electron-builder. On a
 // failure that is NOT the rcedit lock, we exit immediately with its code so
 // real errors aren't masked or retried.
-const path = require('path');
 const { spawn } = require('child_process');
+const { readMetadata } = require('./package-metadata');
 
 const MAX_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 4000;
 const LOCK_SIGNATURES = ['Unable to commit changes', 'rcedit-x64.exe', 'rcedit-ia32.exe'];
 
 const forwarded = process.argv.slice(2);
-const isWin = process.platform === 'win32';
-const builderBin = path.join(
-  __dirname,
-  '..',
-  'node_modules',
-  '.bin',
-  isWin ? 'electron-builder.cmd' : 'electron-builder'
-);
+const builderBin = require.resolve('electron-builder/cli.js');
 
 function sleep(ms) {
   return new Promise((r) => setTimeout(r, ms));
@@ -33,8 +26,7 @@ function sleep(ms) {
 
 function runOnce() {
   return new Promise((resolve) => {
-    // shell:true so the .cmd shim resolves on Windows.
-    const child = spawn(builderBin, forwarded, { shell: isWin });
+    const child = spawn(process.execPath, [builderBin, ...forwarded], { shell: false });
     let combined = '';
 
     const tee = (stream, out) => {
@@ -55,6 +47,7 @@ function runOnce() {
 }
 
 async function main() {
+  readMetadata();
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const { code, output } = await runOnce();
     if (code === 0) process.exit(0);
@@ -82,4 +75,7 @@ async function main() {
   }
 }
 
-main();
+main().catch((error) => {
+  console.error(`[dist] ${error.message}`);
+  process.exitCode = 1;
+});

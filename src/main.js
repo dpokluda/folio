@@ -86,6 +86,11 @@ function themesDir() {
 // into the app (app.asar). __dirname-relative resolution works both in dev and
 // when packaged — Electron reads files inside app.asar transparently.
 function builtinDocPath(file) {
+  if (file === 'README.md') {
+    return app.isPackaged
+      ? path.join(process.resourcesPath, file)
+      : path.join(__dirname, '..', 'docs', 'user', file);
+  }
   return path.join(__dirname, '..', 'samples', file);
 }
 
@@ -105,8 +110,19 @@ const {
 // bundled copy.
 const BUILTIN_DOCS = {
   welcome: { file: 'welcome.md', name: 'Welcome' },
+  'user-guide': { file: 'README.md', name: 'User Guide' },
   'formatting-tour': { file: 'formatting-tour.md', name: 'Markdown Formatting Tour' },
 };
+
+// File associations and launch arguments must preserve the same protection as Help.
+function builtinKeyForPath(filePath) {
+  const normalize = (value) => {
+    const resolved = path.resolve(value);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  };
+  const target = normalize(filePath);
+  return Object.keys(BUILTIN_DOCS).find((key) => normalize(builtinDocPath(BUILTIN_DOCS[key].file)) === target);
+}
 
 // Window/taskbar icon. On Windows the packaged app uses the icon embedded in
 // the .exe by electron-builder; setting it here mainly gives `npm start` (dev)
@@ -441,6 +457,7 @@ const actions = {
   about: () => showAbout(focusedSession()),
   installShellCommand: () => installShellCommand(),
   openWelcome: () => withSession((s) => openBuiltinDoc(s, 'welcome')),
+  openUserGuide: () => withSession((s) => openBuiltinDoc(s, 'user-guide')),
   openFormattingTour: () => withSession((s) => openBuiltinDoc(s, 'formatting-tour')),
 };
 
@@ -1000,6 +1017,11 @@ async function navigateHistory(session, delta) {
 
 async function loadFile(session, filePath, anchor = null, { record = true } = {}) {
   try {
+    const builtinKey = builtinKeyForPath(filePath);
+    if (builtinKey) {
+      loadBuiltinDoc(session, builtinKey);
+      return;
+    }
     const content = fs.readFileSync(filePath, 'utf8');
     session.currentPath = filePath;
     session.currentName = path.basename(filePath);
@@ -1262,14 +1284,19 @@ ipcMain.handle('get-init', (event) => {
 
   const openAsDocument = (target) => {
     const content = fs.readFileSync(target, 'utf8');
-    session.currentPath = target;
-    session.currentName = path.basename(target);
-    store.addRecent(target);
+    const builtinKey = builtinKeyForPath(target);
+    session.currentPath = builtinKey ? null : target;
+    session.currentName = builtinKey ? BUILTIN_DOCS[builtinKey].name : path.basename(target);
     setDirty(session, false);
-    watchCurrentFile(session);
+    if (builtinKey) {
+      stopWatching(session);
+    } else {
+      store.addRecent(target);
+      watchCurrentFile(session);
+    }
     rebuildMenu();
     updateTitle(session);
-    return { path: target, content, name: session.currentName, baseUrl: pathToFileURL(target).href };
+    return { path: session.currentPath, content, name: session.currentName, baseUrl: pathToFileURL(target).href };
   };
 
   // If this window was launched pointing at a folder, start in file-explorer mode

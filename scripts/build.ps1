@@ -19,10 +19,9 @@
     Requires PowerShell 7+ (pwsh), which runs on Windows, macOS and Linux.
 
 .PARAMETER Platform
-    Which platform to package for. 'current' (the default) lets electron-builder
-    pick the host platform. Naming a platform explicitly cross-targets, which
-    generally needs extra tooling (e.g. Wine to build a Windows installer from
-    macOS or Linux).
+    Which platform to package for. 'current' (the default) selects the host.
+    Full Windows distribution requires native Windows, PowerShell 7 and Inno
+    Setup 6.7.3. Cross-host Inno compilation is not configured.
 
 .PARAMETER Install
     Run `npm install` before building. Use after pulling dependency changes.
@@ -45,7 +44,7 @@
 
 .EXAMPLE
     pwsh scripts/build.ps1 -Platform linux
-    Cross-target a Linux AppImage + deb.
+    Package Linux AppImage + tar.gz + deb (use a native Linux host).
 #>
 [CmdletBinding()]
 param(

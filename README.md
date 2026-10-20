@@ -27,6 +27,21 @@ the CSS themes I already use "just work."
 
 ---
 
+## Download
+
+After an update reaches `main`, the packaging workflow publishes **GitHub Actions artifacts**, not GitHub Releases.
+Once a run succeeds, sign in to GitHub, open this repository's **Actions > Package Folio**, select that run, and find its artifacts.
+Each of the six OS/architecture bundles contains two files: a Windows ZIP and setup EXE, a Linux tar.gz and AppImage, or a macOS tar.gz and DMG.
+GitHub wraps each bundle in a transport ZIP; extract it first, then use the actual package inside.
+
+Bundle names show the source product version, OS, architecture, abbreviated commit, run ID, and attempt.
+Use Intel/x64 or Apple Silicon/arm64 on macOS and the matching processor on Windows/Linux.
+The workflow reads the product version and consumer guide from source; it does not set either.
+Artifacts require the applicable repository access and expire according to repository retention policy, so they are not permanent anonymous release links.
+Start with the short [User Guide](docs/user/README.md), also available offline through **Help > User Guide** after installation.
+
+---
+
 ## Features
 
 - **Rendered preview** of GitHub-flavored Markdown injected into Typora's `#write`
@@ -88,7 +103,8 @@ Folio deliberately mirrors Typora's DOM so existing themes render faithfully:
 
 ## How to build & run
 
-**Prerequisites:** [Node.js LTS](https://nodejs.org/) (Node 18+; developed on Node 20/24).
+**Prerequisites:** [Node.js 24 LTS](https://nodejs.org/) is recommended.
+The locked Electron toolchain requires Node 22.12.0 or newer.
 Very new, non-LTS Node releases (26+) can trip up Electron's installer, see
 [If Electron fails to install correctly](#if-electron-fails-to-install-correctly) below.
 
@@ -128,9 +144,8 @@ on every platform. You can also run it directly:
 npm run ensure:electron
 ```
 
-> The most robust fix is still to use an **Electron-supported Node.js LTS**
-> (Node 18/20/22), where Electron's normal installer works and the helper simply
-> no-ops.
+> Prefer **Node 24 LTS**, where Electron's normal installer works and the helper
+> simply does nothing when the runtime is already installed correctly.
 
 ### Packaging
 
@@ -138,17 +153,52 @@ Folio packages with [electron-builder](https://www.electron.build/):
 
 ```sh
 npm run dist          # package for the current platform
-npm run dist:win      # Windows (NSIS installer)
-npm run dist:mac      # macOS (DMG)
-npm run dist:linux    # Linux (AppImage + deb)
+npm run dist:win      # Windows (ZIP + Inno Setup installer)
+npm run dist:mac      # macOS (DMG + tar.gz)
+npm run dist:linux    # Linux (AppImage + tar.gz + deb)
 ```
 
 Build artifacts are written to `release/`.
 
-`npm run dist` and the platform-specific variant for the machine you're on are
-equivalent — electron-builder defaults to the host platform. The `:win` / `:mac`
-/ `:linux` scripts only matter when cross-targeting (which needs extra tooling,
-e.g. Wine to build a Windows installer from macOS or Linux).
+`npm run dist` and the host-specific variant are equivalent.
+Use the native host and an explicit `--x64` or `--arm64` flag for a distribution build.
+Windows full packaging also requires PowerShell 7 and Inno Setup **6.7.3**.
+Install the compiler from its official release and set `ISCC_PATH` to its `ISCC.exe` if it is not found in a normal installation location.
+Local packaging never downloads or installs the compiler automatically; cross-host Inno compilation is not configured.
+
+```sh
+npm run dist:mac -- --arm64 --publish never
+npm run dist:linux -- AppImage tar.gz --x64 --publish never
+npm run dist -- --dir --publish never   # unpacked-only; no Inno compiler needed
+node --test tests/packaging.test.js
+node scripts/package-metadata.js       # validates source version, lock and guide
+```
+
+The product version comes from `package.json`; it is not selected by a workflow or incremented for every build.
+Names include product version, operating system, and architecture, for example `Folio-1.0.0-macos-arm64.tar.gz`.
+Windows ZIPs contain the whole Electron application; keep their companion files together.
+macOS archives contain the complete `.app`, and Linux archives contain the `folio` executable and its companion files.
+The source consumer guide is copied as ordinary `README.md` resources, together with `LICENSE`, and remains accessible through Help after installation.
+Word-style personal TTF fonts are excluded from both the ASAR and external theme copies.
+
+The Windows installer uses the finished electron-builder payload, registers the existing `Folio.Markdown` handler and document icon per user, and does not change PATH or force the user's default app.
+If an earlier NSIS installation exists, close Folio and remove that installation in Windows Settings before running the new setup.
+Settings and documents are retained.
+The macOS builds use ad-hoc integrity signing without Developer ID or notarization; first-launch approval is still needed for downloaded copies.
+
+To inspect the actual produced package pair on its native host:
+
+```sh
+node scripts/verify-packages.js --platform macos --arch arm64 --directory release
+# Linux qualification additionally requires Docker:
+node scripts/verify-packages.js --platform linux --arch x64 --directory release --fedora 44
+```
+
+Windows verification performs a temporary silent install/uninstall and refuses an existing Folio installation, handler, or shortcut.
+Use a clean disposable account for that check, not your normal installed Folio environment.
+The verifier checks native headers, runtime/product versions, archive contents, guide/license bytes, themes and offline assets before staging only the two accepted files.
+Fedora containers test extracted runtime loading, not GUI or FUSE mounting.
+See the [feature validation guide](specs/012-automate-platform-packaging/quickstart.md) for the separate native desktop acceptance matrix.
 
 #### One-shot rebuild
 
@@ -220,11 +270,12 @@ when an SVG changes.
 
 #### Markdown file associations
 
-The Windows installer registers a `Folio.Markdown` file type for `.md`,
+The Inno Setup Windows installer registers a `Folio.Markdown` file type for `.md`,
 `.markdown`, `.mdown`, `.mkd`, and `.mkdn` (see `build.win.fileAssociations` in
-`package.json`). That file type carries `document.ico` as its `DefaultIcon`, so
+`package.json`, implemented in `build/windows/folio.iss`). That file type carries the ordinary installed `resources/document.ico` as its `DefaultIcon`, so
 Markdown files get the document icon — not Folio's app icon — and Explorer shows
-them as *Markdown Document*.
+them as *Markdown Document* when Folio is the selected handler.
+Installation offers Folio as a handler without overriding an existing default application.
 
 If you previously pointed `.md` at Folio yourself via **Open with → Always use
 this app**, Windows stored a per-user override that still resolves to the raw
@@ -277,6 +328,10 @@ again.
 ---
 
 ## How to use
+
+The short [consumer User Guide](docs/user/README.md) comes with installed Folio as `README.md`.
+Choose **Help > User Guide** to read it offline.
+It opens as an untitled document, so editing it and choosing Save never overwrites the shipped guide.
 
 - **Open a file**, `File > Open…` (`Ctrl/Cmd+O`). Recently opened files appear under
   `File > Open Recent`.

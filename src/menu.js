@@ -250,6 +250,7 @@ function buildMenu({ isMac, canInstallShellCommand, styleFamily, appearance, pag
     label: 'Help',
     submenu: [
       { label: 'Welcome', click: () => actions.openWelcome() },
+      { label: 'User Guide', click: () => actions.openUserGuide() },
       { label: 'Markdown Formatting Tour', click: () => actions.openFormattingTour() },
       { type: 'separator' },
       { label: 'About Folio', click: () => actions.about() },

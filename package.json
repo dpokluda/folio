@@ -1,6 +1,6 @@
 {
   "name": "folio",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "A lightweight, themeable Markdown editor & viewer with a Typora-like look — edit the source, preview it rendered, swap CSS themes (Typora-theme compatible).",
   "main": "src/main.js",
   "author": {
@@ -45,10 +45,12 @@
     "mermaid": "^11.16.1"
   },
   "devDependencies": {
+    "@electron/asar": "3.4.1",
     "electron": "^43.2.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "png2icons": "^2.0.1",
+    "semver": "7.8.5",
     "sharp": "^0.35.3"
   },
   "build": {
@@ -59,6 +61,7 @@
       "themes/**/*",
       "samples/**/*",
       "build/icons/**",
+      "!themes/word/fonts/**/*.[tT][tT][fF]",
       "!**/*.map"
     ],
     "extraResources": [
@@ -67,16 +70,32 @@
         "to": "themes",
         "filter": [
           "**/*",
-          "!**/fonts/*.ttf"
+          "!**/fonts/**/*.[tT][tT][fF]"
         ]
+      },
+      {
+        "from": "docs/user/README.md",
+        "to": "README.md"
+      },
+      {
+        "from": "LICENSE",
+        "to": "LICENSE"
       }
     ],
     "directories": {
       "output": "release"
     },
+    "afterAllArtifactBuild": "scripts/build-inno-installer.js",
     "win": {
-      "target": "nsis",
+      "target": "zip",
+      "artifactName": "${productName}-${version}-windows-${arch}.${ext}",
       "icon": "build/icons/icon.ico",
+      "extraResources": [
+        {
+          "from": "build/icons/document.ico",
+          "to": "document.ico"
+        }
+      ],
       "fileAssociations": [
         {
           "ext": [
@@ -95,7 +114,14 @@
       ]
     },
     "mac": {
-      "target": "dmg",
+      "target": [
+        "dmg",
+        "tar.gz"
+      ],
+      "artifactName": "${productName}-${version}-macos-${arch}.${ext}",
+      "identity": "-",
+      "hardenedRuntime": false,
+      "notarize": false,
       "category": "public.app-category.productivity",
       "icon": "build/icons/icon.icns",
       "extraResources": [
@@ -130,8 +156,10 @@
     "linux": {
       "target": [
         "AppImage",
+        "tar.gz",
         "deb"
       ],
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
       "category": "Office",
       "icon": "build/icons/icon.png"
     }
