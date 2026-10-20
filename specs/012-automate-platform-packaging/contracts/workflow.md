@@ -39,7 +39,7 @@ Use exact reviewed action commit pins from [research.md](../research.md), not un
 5. Package the target using the existing local npm command.
 6. Validate both real output packages and their extracted/installed payloads; on Linux, pass `--fedora 44` so both Fedora probes and the FUSE library check occur before extraction cleanup.
 7. Verify that source manifests and the authored guide were not modified.
-8. Upload exactly the validated pair and report target, source version/commit, runner image, and artifact identity.
+8. Upload each file in the validated pair separately and report target, source version/commit, runner image, and both artifact identities.
 
 Use native command status checking, not shell constructs that swallow a failing command before a successful upload.
 Do not share `node_modules`, unpacked builds, or release output between OS/architecture jobs.
@@ -68,17 +68,26 @@ Do not add `--no-sandbox` or change host security settings to manufacture a gree
 
 ## Artifact Contract
 
-Each target has one ordinary ZIP-wrapped artifact containing its two [required payload filenames](./packaging.md).
-Name:
+Each target has two single-file artifacts, one for each [required payload filename](./packaging.md).
+There are twelve directly downloadable artifacts in a complete successful run.
+Use the pinned upload action's `archive: false` mode, following the user-selected Anniversary workflow.
+The uploaded file's basename becomes the artifact name; omit the ignored `name` input.
+For example:
 
 ```text
-Folio-<source-version>-<platform>-<arch>-<sha12>-<run-id>-a<run-attempt>
+Folio-<source-version>-windows-x64.zip
+Folio-<source-version>-windows-x64-setup.exe
 ```
 
-Include the full commit in the run/job summary; the name's shortened commit is only a human-readable label.
-Use the immutable artifact ID returned by the upload when linking the exact upload.
+Do not append commit hashes, run IDs, or attempt markers to filenames.
+Include the full commit, run, and attempt in the run/job summary.
+Use both immutable artifact IDs and URLs returned by the uploads when linking the exact files.
 Staging contains exactly two nonempty validated package files, not an unpacked tree.
-Use no overwrite, no unwrapped single-file upload mode, compression level zero for already-compressed payloads, and `if-no-files-found: error`.
+Each upload uses an exact staged file path, not a directory or glob.
+Use `archive: false`, `overwrite: false`, and `if-no-files-found: error`.
+The no-overwrite setting matches Anniversary's action default; do not silently delete existing uploads on reruns.
+Any conflicting same-named upload follows that default failure behavior.
+No compression-level override is needed because files are uploaded without additional archiving.
 Omit a hardcoded retention override so repository policy applies.
 
 The source version is not necessarily `1.0.0`: future source versions flow through the same workflow.
@@ -94,9 +103,10 @@ Set a 45-minute job timeout, with no `continue-on-error` or success-producing ca
 Do not configure branch-wide latest-only concurrency or cancel older pushes intentionally.
 
 Any source validation, dependency install, build, compiler, extraction, package check, Fedora check, or required upload failure makes its target and the workflow unsuccessful.
-Successful target bundles may remain visible when another target fails.
+Successful package uploads may remain visible when another target or upload fails.
 Only six successful target jobs establish the complete twelve-package result.
 Unavailable runners or tools are actionable failures, not permission to skip an architecture, relabel an emulated payload, or publish another revision's output.
 
 Actions artifacts are authenticated, retention-limited downloads, not permanent anonymous releases.
-Root README instructions must explain how to find the run and choose a target bundle, including GitHub sign-in/access requirements and the extra transport-ZIP layer.
+Root README instructions must explain how to find the run and choose a package, including GitHub sign-in/access requirements and direct-file downloads.
+Earlier runs retain their original target bundles and transport ZIPs; changing the workflow does not rename those existing artifacts.

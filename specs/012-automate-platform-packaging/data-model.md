@@ -50,7 +50,7 @@ Only these target keys are accepted by the new verifier.
 Native machine identifiers are normalized explicitly: PE AMD64/ARM64, ELF x86-64/AArch64, and Mach-O x86_64/arm64.
 The primary application payload must match the requested target; a bootstrap installer's architecture is not that payload's architecture.
 Docker's `amd64` platform name corresponds to target `x64`.
-AppImage's filename spelling `x86_64` also corresponds to target `x64`; its tarball and workflow bundle still use `x64`.
+AppImage's filename spelling `x86_64` also corresponds to target `x64`; its tarball and target key still use `x64`.
 
 ## Workflow Run and Target Attempt
 
@@ -74,15 +74,18 @@ For Linux CI, validation includes the requested Fedora 44 probes before extracti
 Rerunning failed jobs can leave successful artifacts from an earlier attempt of the same run.
 Those outputs remain valid for that exact source commit; do not confuse "same revision" with "all jobs had the same attempt number."
 
-## Package and Artifact Bundle
+## Package and Actions Artifact
 
 A package has product version, target key, format, filename, source commit/run provenance, and validation result.
 Naming follows [the packaging contract](./contracts/packaging.md).
-A target bundle contains exactly its two validated package payloads and is named according to [the workflow contract](./contracts/workflow.md).
+Each package is a separate direct-file artifact named after its filename, following [the workflow contract](./contracts/workflow.md).
+Each target publishes two artifacts; a complete successful run publishes twelve.
 
 Staging is generated under `release/artifacts/<target>/`.
 It does not contain logs, dependency caches, update metadata, unpacked directories, or files from another target.
-Artifact IDs are assigned by GitHub; names are unique for source/run/attempt/target.
+Artifact IDs are assigned by GitHub; filenames identify product version, target, and format.
+Source commit and run/attempt provenance remain in GitHub's records and the job summary, not filename suffixes.
+Uploads keep the action's default no-overwrite behavior, matching Anniversary.
 Retention and access follow repository policy rather than a new release lifecycle.
 
 ## Windows Installation Identity

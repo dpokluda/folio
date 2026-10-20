@@ -615,3 +615,75 @@ test('CI compiler provisioning delegates to the same engine checker as local bui
   assert.match(provisioning, /Get-FileHash -LiteralPath \$download -Algorithm SHA256/);
   assert.match(provisioning, /Get-AuthenticodeSignature -LiteralPath \$download/);
 });
+
+function workflowNodeStep(name, workflow = fs.readFileSync(path.join(source, '.github/workflows/package.yml'), 'utf8')) {
+  const step = workflow.replaceAll('\r\n', '\n').split(/\n {6}- /).find((entry) => entry.startsWith(`name: ${name}\n`));
+  assert.ok(step, `Missing workflow step: ${name}`);
+  const script = step.match(/node <<'NODE'\r?\n([\s\S]*?)\r?\n {10}NODE/);
+  assert.ok(script, `Missing Node script in workflow step: ${name}`);
+  return script[1];
+}
+
+test('workflow uploads each validated package directly using its filename, like Anniversary', () => {
+  const workflow = fs.readFileSync(path.join(source, '.github/workflows/package.yml'), 'utf8').replaceAll('\r\n', '\n');
+  const uploads = workflow.split(/\r?\n {6}- /).filter((step) => step.includes('uses: actions/upload-artifact@'));
+  assert.equal(uploads.length, 2);
+  for (const [index, output] of ['archive', 'distribution'].entries()) {
+    assert.match(uploads[index], new RegExp(`^ {8}id: ${output}$`, 'm'));
+    assert.ok(uploads[index].includes(
+      `path: release/artifacts/\${{ matrix.platform }}-\${{ matrix.arch }}/\${{ steps.metadata.outputs.${output} }}`));
+    assert.match(uploads[index], /archive: false/);
+    assert.match(uploads[index], /if-no-files-found: error/);
+    assert.match(uploads[index], /overwrite: false/);
+    assert.doesNotMatch(uploads[index], /^ {10}name:|path:.*\*/m);
+    for (const [suffix, field] of [['ID', 'id'], ['URL', 'url']]) {
+      assert.ok(workflow.includes(`${output.toUpperCase()}_ARTIFACT_${suffix}: \${{ steps.${output}.outputs.artifact-${field} }}`));
+    }
+  }
+  assert.doesNotMatch(workflow, /sha12/);
+});
+
+test('workflow metadata and download links cover all twelve readable filenames and later versions', (t) => {
+  const workflow = fs.readFileSync(path.join(source, '.github/workflows/package.yml'), 'utf8').replaceAll('\r\n', '\n');
+  const crlfWorkflow = workflow.replaceAll('\n', '\r\n');
+  const metadataScript = workflowNodeStep('Read and validate source metadata', crlfWorkflow);
+  const summaryScript = workflowNodeStep('Report provenance and verification boundary', crlfWorkflow);
+  assert.equal(metadataScript, workflowNodeStep('Read and validate source metadata', workflow));
+  assert.equal(summaryScript, workflowNodeStep('Report provenance and verification boundary', workflow));
+  for (const version of ['1.0.0', '1.1.0-rc.1+build.5']) {
+    const f = fixture(t, version);
+    fs.copyFileSync(path.join(source, 'scripts/package-metadata.js'), write(f.root, 'scripts/package-metadata.js', ''));
+    fs.mkdirSync(path.join(f.root, 'node_modules'));
+    fs.symlinkSync(path.dirname(require.resolve('semver/package.json')),
+      path.join(f.root, 'node_modules/semver'), process.platform === 'win32' ? 'junction' : 'dir');
+    for (const platform of ['windows', 'linux', 'macos']) {
+      for (const arch of ['x64', 'arm64']) {
+        const output = write(f.root, 'metadata.outputs', '');
+        const summary = write(f.root, 'summary.md', '');
+        const env = {
+          ...process.env, EXPECTED_PLATFORM: platform, EXPECTED_ARCH: arch, PRODUCT_VERSION: version,
+          GITHUB_OUTPUT: output, GITHUB_STEP_SUMMARY: summary,
+          GITHUB_SHA: 'a'.repeat(40), GITHUB_RUN_ID: '12345', GITHUB_RUN_ATTEMPT: '2',
+          ARCHIVE_ARTIFACT_ID: '101',
+          ARCHIVE_ARTIFACT_URL: 'https://github.com/dpokluda/folio/actions/runs/12345/artifacts/101',
+          DISTRIBUTION_ARTIFACT_ID: '102',
+          DISTRIBUTION_ARTIFACT_URL: 'https://github.com/dpokluda/folio/actions/runs/12345/artifacts/102',
+        };
+        const metadata = spawnSync(process.execPath, ['-e', metadataScript], { cwd: f.root, env, encoding: 'utf8' });
+        assert.equal(metadata.status, 0, metadata.stderr);
+        const [archive, distribution] = packageNames(version, platform, arch);
+        const values = Object.fromEntries(fs.readFileSync(output, 'utf8').trim().split(/\r?\n/).map((line) => line.split('=')));
+        assert.deepEqual(values, { version, archive, distribution });
+        const reported = spawnSync(process.execPath, ['-e', summaryScript], { cwd: f.root, env, encoding: 'utf8' });
+        assert.equal(reported.status, 0, reported.stderr);
+        const text = fs.readFileSync(summary, 'utf8');
+        assert.ok(text.includes(`[${archive}](${env.ARCHIVE_ARTIFACT_URL})`));
+        assert.ok(text.includes(`[${distribution}](${env.DISTRIBUTION_ARTIFACT_URL})`));
+        assert.ok(text.includes('artifact 101'));
+        assert.ok(text.includes('artifact 102'));
+        assert.ok(text.includes(`Source commit: ${env.GITHUB_SHA}`));
+        assert.ok(text.includes('Run: 12345; attempt: 2'));
+      }
+    }
+  }
+});

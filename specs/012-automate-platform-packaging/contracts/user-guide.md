@@ -20,7 +20,7 @@ It does not claim Folio is a single-file application or copy Anniversary's runti
 | Topic | Consumer outcome |
 | ----- | ---------------- |
 | Purpose | Understand local Markdown viewing and light source editing; retain the Typora non-affiliation statement where compatibility is named. |
-| Choosing a download | Distinguish OS, x64/arm64, Intel/Apple Silicon, installer versus archive, and Actions transport ZIP versus the product package. |
+| Choosing a download | Distinguish OS, x64/arm64, Intel/Apple Silicon, installer versus archive, direct Actions downloads, and legacy outer transport ZIPs. |
 | Starting | Install Windows per user, copy the macOS app from DMG, extract complete archives, or make an AppImage executable. |
 | First launch | Follow ordinary unsigned-app approval; do not disable system-wide protections or treat genuine malware warnings as harmless. |
 | Core use | Open files/folders; switch preview/source; save and Save As; find text/files; change themes; export PDF; open another window. |

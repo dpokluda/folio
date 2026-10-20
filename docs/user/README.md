@@ -22,7 +22,8 @@ Extract the complete archive.
 On Windows run `Folio.exe` and keep all companion files together; on macOS open the extracted `Folio.app`; on Linux run `./folio` from its extracted folder.
 Archive use does not create a separate portable-settings mode.
 Downloads name the product version, operating system, and architecture, such as `Folio-1.0.0-windows-arm64-setup.exe`.
-If GitHub Actions wraps your download in another ZIP, extract that transport ZIP first to get the actual package files.
+GitHub Actions lists each package by its filename and downloads it directly.
+Older runs may wrap packages in another ZIP; extract that outer ZIP first to get the actual package files.
 
 The app includes its runtime; you do not need Node.js, npm, or developer tools.
 Close Folio before updating or replacing its application files.

@@ -31,13 +31,16 @@ the CSS themes I already use "just work."
 
 After an update reaches `main`, the packaging workflow publishes **GitHub Actions artifacts**, not GitHub Releases.
 Once a run succeeds, sign in to GitHub, open this repository's **Actions > Package Folio**, select that run, and find its artifacts.
-Each of the six OS/architecture bundles contains two files: a Windows ZIP and setup EXE, a Linux tar.gz and AppImage, or a macOS tar.gz and DMG.
-GitHub wraps each bundle in a transport ZIP; extract it first, then use the actual package inside.
+Each successful run lists twelve individual downloads: an archive and an installer/distribution package for each OS and architecture.
+Artifact names match the package filenames, such as `Folio-1.0.0-windows-x64-setup.exe` or `Folio-1.0.0-macos-arm64.dmg`.
+Download the matching file directly; the workflow does not add an outer transport ZIP.
 
-Bundle names show the source product version, OS, architecture, abbreviated commit, run ID, and attempt.
+Filenames identify the source product version, OS, architecture, and package type.
+The source commit, run, attempt, and artifact IDs remain available in the run metadata and job summaries, not the filenames.
 Use Intel/x64 or Apple Silicon/arm64 on macOS and the matching processor on Windows/Linux.
 The workflow reads the product version and consumer guide from source; it does not set either.
 Artifacts require the applicable repository access and expire according to repository retention policy, so they are not permanent anonymous release links.
+Earlier runs retain their original two-file bundles and names.
 Start with the short [User Guide](docs/user/README.md), also available offline through **Help > User Guide** after installation.
 
 ---

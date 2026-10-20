@@ -41,7 +41,7 @@ Use explicit per-platform `artifactName` configuration rather than depending on 
 For AppImage only, electron-builder expands x64's architecture spelling as `x86_64`, so that file is `Folio-V-linux-x86_64.AppImage`.
 The corresponding tarball and workflow target remain `x64`; arm64 filenames are unchanged.
 Only the custom setup filename is supplied by the Inno integration.
-Other local outputs may exist, but only these twelve payload files enter the six automated target bundles.
+Other local outputs may exist, but only these twelve payload files are published, each as a separate direct-file Actions artifact.
 
 ## Contents and Resource Locations
 

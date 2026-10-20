@@ -145,11 +145,12 @@ gh run view <run-id> --repo dpokluda/folio
 gh run download <run-id> --repo dpokluda/folio --dir <empty-download-directory>
 ```
 
-Expected: six required target jobs succeed and six target bundles contain twelve product package files.
-Names identify source version, OS, architecture, commit, run, and attempt; package names match the contract.
+Expected: six required target jobs succeed and twelve directly downloadable artifacts match the product package filenames.
+Names identify source version, OS, architecture, and format; commit/run/attempt provenance and artifact IDs are in the run and job summaries.
 There is no new or moved tag and no GitHub Release.
 Builder update metadata, blockmaps, logs, and source files are not uploaded.
-Download instructions explain repository access, expiry, and the transport ZIP.
+Download instructions explain repository access, expiry, and direct-file downloads.
+Earlier runs retain their original two-file bundles and transport ZIPs.
 
 Validate failure propagation with the focused test fixtures and an authorized disposable test workflow environment if one is available.
 Do not push deliberately broken prerequisites to `main` solely to test failure behavior.
@@ -249,11 +250,11 @@ These safety paths still require native Windows qualification.
 | macOS arm64 package contents, signatures, native runtime, guide and local application flows | Pass on actual macOS 27.0.1; isolated test profiles and copied test-entry bootstrap where needed. This is not a claim that macOS 15 or the macOS 12 minimum was tested. |
 | Actual first-launch trust/SmartScreen/Gatekeeper approval | Not run against a freshly downloaded quarantined copy. |
 | macOS Intel package and desktop acceptance | Native macOS Intel CI package checks passed in the first run below; desktop acceptance is still not run. |
-| Windows x64/arm64 compiler, installer and genuine standard-user checks | The third run built both ZIP/setup pairs but failed installed shell-integration verification. A canonical-path correction and field-specific diagnostics are local; native confirmation and genuine standard-user qualification remain pending. |
+| Windows x64/arm64 compiler, installer and genuine standard-user checks | Both native CI targets passed in run 39509976546, including temporary install/uninstall and integration verification. Genuine standard-user and upgrade/migration qualification remain pending. |
 | Fedora 44 x64/arm64 container, FUSE mount and desktop acceptance | Native Linux and Fedora 44 container probes passed for both architectures in the second run. Desktop/FUSE-mount checks are not run. |
 | Preserved local Linux deb generation | Configuration retained and checked by fixtures; native generation not run. |
-| Complete twelve-payload content and license audit | Pending; no run has yet provided the complete six-bundle set. |
-| Live six-job Actions run, upload and rerun behavior | The third run has four successes with both Windows jobs failing after successful package builds. See the run evidence below. No fix was committed or pushed by the agent. |
+| Complete twelve-payload content and license audit | Run 39509976546 provided the complete package set; a separate full downloaded-payload audit remains pending. |
+| Live six-job Actions run, upload and rerun behavior | All six targets passed in run 39509976546 using the original wrapped bundles. Anniversary-style direct-file uploads are local and await a new run. No fix was committed or pushed by the agent. |
 
 Tasks T031 through T037 remain unchecked until their required external/native evidence exists.
 The feature must not be marked fully implemented based only on these local results.
@@ -360,7 +361,27 @@ After rebuilding with `npm run dist:mac -- --arm64 --publish never`, both fresh 
 That included native runtime and resource checks, signatures, DMG mounting/copying/detachment, and two-file staging with the canonical temporary root.
 Snapshots confirmed that packaging left the product manifests, authored guide, and license unchanged.
 
-These changes remain local; no commit, push, or CI rerun was performed.
-The latest hosted run still tests `e0d7035c7bf2d2d63212d633903ba93081f7dcda`, not this correction.
-The original compound error did not expose its mismatched field, so a new native Windows run is required to confirm the correction resolves that failure.
+These changes were initially left local for review, without an agent commit, push, or CI rerun.
+The user subsequently pushed them; the native confirmation is recorded below.
 Tasks T031 through T037 remain unchecked.
+
+### Fourth merged run and user-directed artifact presentation
+
+[Run 39509976546](https://github.com/dpokluda/folio/actions/runs/39509976546) built revision `15ce2dceda2a0069d62a76e48401346a9c3a733d`.
+All six native jobs passed and six source-matching target bundles were uploaded.
+Both Windows targets passed their installation/integration checks, confirming the canonical-path correction in native CI.
+The Windows x64 and Linux arm64 bundle indexes were inspected and each listed the expected two package files.
+That index check was not a full downloaded-payload audit of all twelve distributions.
+
+The user requested human-readable artifacts matching [Anniversary run 39196731356](https://github.com/dpokluda/anniversary/actions/runs/39196731356).
+Its workflow uses `archive: false` for separate archive and installer uploads, with no explicit artifact name or overwrite setting.
+Folio now follows that presentation: twelve direct-file artifacts named after the package files, without commit/run/attempt suffixes.
+Both upload IDs and URLs are retained with full build provenance in each job summary.
+No-overwrite behavior is unchanged and matches Anniversary's default; repository retention remains unchanged.
+
+The new regressions failed against the former one-bundle upload and missing per-package metadata.
+After the correction, 38 checks passed under Node 24.22.0, with the native Windows 8.3 probe explicitly skipped on macOS.
+The workflow metadata and summary scripts were exercised with LF/CRLF source and executed for all six targets at current and later source versions.
+The updated workflow passed actionlint 1.7.12.
+The direct-file presentation has not yet run in hosted CI, and no existing hosted artifact was renamed or deleted.
+The agent did not stage, commit, push, or start a workflow run.

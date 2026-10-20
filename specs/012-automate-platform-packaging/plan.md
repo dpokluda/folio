@@ -217,8 +217,10 @@ With the Linux verifier's required CI option `--fedora 44`, run both extracted p
 Do not disable the application sandbox to make a check pass.
 
 Stage only the target's two validated payload files under `release/artifacts/<target>/` after every requested check has succeeded.
-Upload one immutable target bundle named with product version, OS, architecture, commit, run ID, and attempt.
-Use repository-configured retention, ordinary artifact ZIP wrapping, no overwrite, and an error if expected files are absent.
+Upload each file separately with the pinned action's `archive: false` mode, following Anniversary's user-selected artifact presentation.
+Each artifact is named after the package file, including product version, OS, architecture, and format, without commit/run suffixes.
+Keep source commit, run/attempt details, and both immutable artifact IDs and links in the job summary.
+Use repository-configured retention, no overwrite, and an error if expected files are absent.
 Six successful jobs with two validated payloads each establish the required twelve-file set.
 Do not upload builder logs, update metadata, blockmaps, source files, or broad `release/**` globs.
 
@@ -234,7 +236,7 @@ No platform is declared verified solely from a green package-upload step.
 
 | Requirements | Design surface |
 | ------------ | -------------- |
-| FR-001, FR-002, FR-005 through FR-007 | Six-job push workflow, immutable run/attempt bundles, failure propagation. |
+| FR-001, FR-002, FR-005 through FR-007 | Six-job push workflow, twelve direct-file artifacts with run provenance, failure propagation. |
 | FR-003, FR-004 | Source-only product-version update and shared metadata preflight; future-version fixtures. |
 | FR-008, FR-009 | Inno contract, stable identity, per-user shell registration, deliberate NSIS transition. |
 | FR-010, FR-011, FR-016 | Complete archive payloads, native inspection, resource and license inclusion, both font exclusions. |

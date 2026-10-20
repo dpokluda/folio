@@ -4,10 +4,9 @@
 
 **Created**: 2026-10-19
 
-**Status**: Implementation in progress; Linux and macOS CI targets pass.
-Both Windows targets now build their archives and Inno installers, but fail installed shell-integration verification before upload.
-A local correction canonicalizes temporary installation paths and reports individual integration mismatches; Windows CI confirmation is pending.
-A complete successful CI run and remaining native qualification are pending.
+**Status**: Implementation in progress; all six native packaging targets passed CI in run `39509976546`.
+The user-requested Anniversary-style direct-file artifact uploads are implemented locally and await a new CI run.
+Remaining native desktop and installation qualification is pending.
 
 **Input**: First update Folio's source-controlled product version to 1.0 and create a simple consumer-specific `README.md` that is distributed with the application.
 These are product changes, not responsibilities of the pipeline.
@@ -166,6 +165,8 @@ Install or extract, launch Folio, open a Markdown file, switch between preview a
   Missing, invalid, or inconsistent product-version metadata MUST cause a clear failure rather than a fallback version.
   Source revision and workflow-run identity MUST distinguish repeated builds of the same product version without Git-tag changes.
 - **FR-005**: Packages MUST be uploaded as GitHub Actions artifacts associated with their originating run.
+  Each required package MUST be a separate direct-file artifact named after its package filename, following Anniversary's workflow.
+  Commit, run, and attempt identifiers belong in artifact/run metadata and job summaries, not the download names.
   This feature MUST NOT publish GitHub Releases or create or move Git tags.
 - **FR-006**: Download labels MUST unambiguously identify product, application version, operating system, architecture, and package type.
   All packages within a successful run MUST come from the same source revision.
@@ -212,8 +213,9 @@ Install or extract, launch Folio, open a Markdown file, switch between preview a
 | macOS | x64, Intel | `.tar.gz` containing the application bundle | `.dmg` |
 | macOS | arm64, Apple Silicon | `.tar.gz` containing the application bundle | `.dmg` |
 
-GitHub Actions may wrap downloaded artifacts in its own transport archive.
-The package files inside MUST retain the formats above.
+The workflow uploads each package without adding a transport archive, so its visible artifact name and downloaded filename match.
+Package files MUST retain the formats above.
+Older runs may retain their original ZIP-wrapped target bundles.
 An AppImage is a runnable distribution format, not a promise of automatic installation or desktop integration.
 
 ### Key Entities
@@ -260,7 +262,8 @@ An AppImage is a runnable distribution format, not a promise of automatic instal
   Other unrelated local packaging behavior remains supported.
 - Archive-based use does not change where Folio stores settings or automatically install shell launchers or file associations.
   Existing platform-specific command-install limitations must be explained rather than silently expanded.
-- The Anniversary README is a reference for simplicity and user focus, not a statement that Folio is a single-file application or shares Anniversary's runtime prerequisites.
+- The Anniversary README and workflow are references for simplicity, user focus, and directly downloadable package artifacts.
+  They do not imply that Folio is a single-file application or shares Anniversary's runtime prerequisites.
 - The current constitution's Technology & Platform Constraints explicitly name NSIS for Windows.
   Planning must resolve the conflict with the confirmed Inno Setup requirement through a constitution amendment or a justified exception recorded under the constitution's governance rules.
   This specification records the proposed change; it does not itself amend the constitution.

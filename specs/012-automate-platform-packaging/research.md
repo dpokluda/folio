@@ -211,7 +211,7 @@ An unofficial marketplace setup action or another packaging framework is not req
 
 **Sources**: [Official release](https://github.com/jrsoftware/issrc/releases/tag/is-6_7_3), [download verification](https://jrsoftware.org/isdl-verify.php), [license](https://jrsoftware.org/files/is/license.txt), [compiler command line](https://jrsoftware.org/ishelp/topic_compilercmdline.htm), [per-user privileges](https://jrsoftware.org/ishelp/topic_setup_privilegesrequired.htm), [architecture restrictions](https://jrsoftware.org/ishelp/topic_setup_architecturesallowed.htm), [64-bit install mode](https://jrsoftware.org/ishelp/topic_setup_architecturesinstallin64bitmode.htm), and [running applications](https://jrsoftware.org/ishelp/topic_setup_closeapplications.htm).
 
-## 11. Pin action commits and publish six immutable target bundles
+## 11. Pin action commits and publish readable package artifacts
 
 **Decision**: Use the following reviewed first-party action commit pins, resolved from their current version tags during research.
 
@@ -221,21 +221,23 @@ An unofficial marketplace setup action or another packaging framework is not req
 | `actions/setup-node` | `v7.1.0` | `949feb2413d6458794dcd2491c4babbbce0c15c1` |
 | `actions/upload-artifact` | `v7.0.2` | `cf430e030ddbb5b0abf93d22962f4752f3646cd9` |
 
-Upload one ordinarily ZIP-wrapped artifact per target, containing its two already-compressed package files.
-Names include product version, target, source commit, run ID, and attempt.
-Use no overwrite and follow repository-configured retention.
-Do not use the newer single-file unwrapped upload option.
+On 2026-10-20 the user requested Anniversary-style artifacts, superseding the original six-target-bundle design.
+Upload each validated package separately with `archive: false`, as Anniversary does.
+The file's basename becomes its artifact name; no explicit `name` input or commit/run/attempt suffix is needed.
+Use the action's default no-overwrite behavior, matching Anniversary, and retain Folio's repository-configured retention.
+Keep full source/run/attempt provenance and both artifact IDs/links in each job summary.
 
-**Rationale**: Immutable run/attempt-scoped names avoid collisions without deleting earlier output.
-The six bundles are convenient to download while preserving twelve actual product package files.
-Actions wrapping does not change the formats or permissions encoded inside the tarballs and DMGs.
+**Rationale**: Twelve separately listed files expose the setup EXEs, DMGs, AppImages, and archives directly.
+Users do not need to decode build identifiers or extract a transport ZIP before choosing a package.
+GitHub's run records and artifact IDs retain provenance independently of human-readable filenames.
+Direct upload does not change the formats or permissions encoded inside the tarballs and DMGs.
 The uploaded AppImage itself may need the documented executable-bit step after download.
 
 **Alternatives considered**: One mutable `latest` artifact would lose clear provenance.
-Twelve separate uploads add bookkeeping without changing the requested outputs.
+The earlier six wrapped target bundles hid package types and were explicitly replaced by the user's request.
 A fixed retention value could conflict with repository policy; permanent release hosting was explicitly rejected.
 
-**Sources**: [checkout](https://github.com/actions/checkout), [setup-node](https://github.com/actions/setup-node), [upload-artifact](https://github.com/actions/upload-artifact), [artifact storage and downloads](https://docs.github.com/en/actions/tutorials/store-and-share-data).
+**Sources**: [checkout](https://github.com/actions/checkout), [setup-node](https://github.com/actions/setup-node), [upload-artifact](https://github.com/actions/upload-artifact), [pinned upload inputs](https://github.com/actions/upload-artifact/blob/cf430e030ddbb5b0abf93d22962f4752f3646cd9/action.yml), [Anniversary reference run](https://github.com/dpokluda/anniversary/actions/runs/39196731356), [artifact storage and downloads](https://docs.github.com/en/actions/tutorials/store-and-share-data).
 
 ## 12. Use version-specific builder configuration and honest signing claims
 

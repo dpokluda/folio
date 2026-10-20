@@ -96,9 +96,11 @@ jobs:
         run: |
           node <<'NODE'
           const fs = require('node:fs');
-          const {version} = require('./scripts/package-metadata').readMetadata();
+          const {readMetadata, packageNames} = require('./scripts/package-metadata');
+          const {version} = readMetadata();
+          const [archive, distribution] = packageNames(version, process.env.EXPECTED_PLATFORM, process.env.EXPECTED_ARCH);
           fs.appendFileSync(process.env.GITHUB_OUTPUT,
-            `version=${version}\nsha12=${process.env.GITHUB_SHA.slice(0,12)}\n`);
+            `version=${version}\narchive=${archive}\ndistribution=${distribution}\n`);
           NODE
 
       - name: Run packaging contract checks
@@ -128,21 +130,31 @@ jobs:
       - name: Confirm source inputs were not rewritten
         run: git diff --exit-code -- package.json package-lock.json docs/user/README.md LICENSE
 
-      - name: Upload the validated target pair
-        id: artifact
+      - name: Upload the archive
+        id: archive
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: Folio-${{ steps.metadata.outputs.version }}-${{ matrix.platform }}-${{ matrix.arch }}-${{ steps.metadata.outputs.sha12 }}-${{ github.run_id }}-a${{ github.run_attempt }}
-          path: release/artifacts/${{ matrix.platform }}-${{ matrix.arch }}/*
+          path: release/artifacts/${{ matrix.platform }}-${{ matrix.arch }}/${{ steps.metadata.outputs.archive }}
+          archive: false
           if-no-files-found: error
-          compression-level: 0
+          overwrite: false
+
+      - name: Upload the installer or distribution package
+        id: distribution
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: release/artifacts/${{ matrix.platform }}-${{ matrix.arch }}/${{ steps.metadata.outputs.distribution }}
+          archive: false
+          if-no-files-found: error
           overwrite: false
 
       - name: Report provenance and verification boundary
         env:
           PRODUCT_VERSION: ${{ steps.metadata.outputs.version }}
-          ARTIFACT_ID: ${{ steps.artifact.outputs.artifact-id }}
-          ARTIFACT_URL: ${{ steps.artifact.outputs.artifact-url }}
+          ARCHIVE_ARTIFACT_ID: ${{ steps.archive.outputs.artifact-id }}
+          ARCHIVE_ARTIFACT_URL: ${{ steps.archive.outputs.artifact-url }}
+          DISTRIBUTION_ARTIFACT_ID: ${{ steps.distribution.outputs.artifact-id }}
+          DISTRIBUTION_ARTIFACT_URL: ${{ steps.distribution.outputs.artifact-url }}
         run: |
           node <<'NODE'
           const fs = require('node:fs');
@@ -155,8 +167,8 @@ jobs:
             `Source commit: ${e.GITHUB_SHA}`,
             `Run: ${e.GITHUB_RUN_ID}; attempt: ${e.GITHUB_RUN_ATTEMPT}`,
             `Runner: ${e.RUNNER_OS} ${e.RUNNER_ARCH}; image: ${e.ImageOS || e.RUNNER_OS} ${e.ImageVersion || 'see runner setup log'}`,
-            `Artifact: [${e.ARTIFACT_ID}](${e.ARTIFACT_URL})`,
-            ...files.map(file => `- ${file}`),
+            `Archive: [${files[0]}](${e.ARCHIVE_ARTIFACT_URL}) (artifact ${e.ARCHIVE_ARTIFACT_ID})`,
+            `Installer/distribution: [${files[1]}](${e.DISTRIBUTION_ARTIFACT_URL}) (artifact ${e.DISTRIBUTION_ARTIFACT_ID})`,
             '',
             'Actual package contents and native runtime probes passed.',
             'Desktop acceptance, standard-user Windows behavior, and AppImage FUSE mounting require separate recorded checks.',
