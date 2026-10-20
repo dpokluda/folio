@@ -132,6 +132,8 @@ Reject the option for another platform or an unsupported reference release.
 
 Windows verification refuses to start stateful checks if an existing Folio installation, owned shell registration, or conflicting shortcut is present.
 It then performs temporary silent install/uninstall and owned shell-registration checks on the clean test account.
+Resolve the temporary parent to its native canonical path before creating the owned test directory, so expanded shell-link paths match the installation paths.
+Integration failures identify each mismatched command, icon, extension registration, registered application, or shortcut with its expected and actual values.
 There is no force option to adopt or remove an existing installation.
 macOS verification checks both extracted tarball and mounted/copied DMG contents and signatures.
 Linux verification checks tarball and extracted AppImage contents.

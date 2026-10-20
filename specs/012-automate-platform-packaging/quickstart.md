@@ -249,11 +249,11 @@ These safety paths still require native Windows qualification.
 | macOS arm64 package contents, signatures, native runtime, guide and local application flows | Pass on actual macOS 27.0.1; isolated test profiles and copied test-entry bootstrap where needed. This is not a claim that macOS 15 or the macOS 12 minimum was tested. |
 | Actual first-launch trust/SmartScreen/Gatekeeper approval | Not run against a freshly downloaded quarantined copy. |
 | macOS Intel package and desktop acceptance | Native macOS Intel CI package checks passed in the first run below; desktop acceptance is still not run. |
-| Windows x64/arm64 compiler, installer and genuine standard-user checks | Contract tests now pass; the second run failed the compiler's zero PE-version check. A shared engine-probe correction is local. Installer and genuine standard-user qualification remain pending. |
+| Windows x64/arm64 compiler, installer and genuine standard-user checks | The third run built both ZIP/setup pairs but failed installed shell-integration verification. A canonical-path correction and field-specific diagnostics are local; native confirmation and genuine standard-user qualification remain pending. |
 | Fedora 44 x64/arm64 container, FUSE mount and desktop acceptance | Native Linux and Fedora 44 container probes passed for both architectures in the second run. Desktop/FUSE-mount checks are not run. |
 | Preserved local Linux deb generation | Configuration retained and checked by fixtures; native generation not run. |
 | Complete twelve-payload content and license audit | Pending; no run has yet provided the complete six-bundle set. |
-| Live six-job Actions run, upload and rerun behavior | The first run had three successes; the second has four successes with both Windows jobs still failing. See the run evidence below. No fix was committed or pushed by the agent. |
+| Live six-job Actions run, upload and rerun behavior | The third run has four successes with both Windows jobs failing after successful package builds. See the run evidence below. No fix was committed or pushed by the agent. |
 
 Tasks T031 through T037 remain unchecked until their required external/native evidence exists.
 The feature must not be marked fully implemented based only on these local results.
@@ -298,4 +298,69 @@ The fix replaces both PE-property checks with one shared, successful no-output c
 It retains the installer SHA-256 and publisher-signature checks and rejects mismatched engine versions or failed probes.
 The regression for a `0.0.0.0` launcher was observed failing before this change.
 
-These changes remain local and uncommitted; a subsequent native Windows CI run is required before installer qualification is claimed.
+These changes were initially left local and uncommitted for the user's review.
+The user subsequently pushed them; the native results are recorded below.
+
+### Third merged GitHub Actions run: Windows installed integration check
+
+[Run 39450119144](https://github.com/dpokluda/folio/actions/runs/39450119144) built revision `e0d7035c7bf2d2d63212d633903ba93081f7dcda`.
+All six jobs finished; the overall conclusion was `failure`.
+Linux and macOS passed on both architectures, including package inspection, native runtime probes, source immutability, and upload.
+Both Windows jobs passed the shared compiler-engine check and built their ZIP archives and Inno Setup EXEs.
+The compiler-version correction is therefore confirmed on both native Windows targets.
+
+| Target | Job ID | Result |
+| ------ | ------ | ------ |
+| Windows x64 | `118722387063` | Built both packages; failed installed shell-integration verification before upload. |
+| Windows arm64 | `118722387061` | Same verification failure after successful archive and installer builds. |
+| Linux x64 | `118722387383` | Passed and uploaded the validated package pair. |
+| Linux arm64 | `118722387123` | Passed and uploaded the validated package pair. |
+| macOS x64 | `118722387044` | Passed and uploaded the validated package pair. |
+| macOS arm64 | `118722386899` | Passed and uploaded the validated package pair. |
+
+The exact Windows error was `Installed per-user Markdown registration, icon or Start menu shortcut is incomplete.`
+It originates from the compound integration assertion in `scripts/verify-packages.js`, after temporary installation and uninstall-identity checks.
+The captured logs do not identify which individual registration, icon, or shortcut comparison failed.
+No specific root cause or corrective implementation is claimed from that message alone.
+Windows uploads were correctly skipped, so the run does not provide Windows downloads.
+
+The artifact API confirmed four unexpired bundles, all attributed to the exact revision above:
+
+| Target | Artifact ID |
+| ------ | ----------- |
+| Linux x64 | `12278421194` |
+| Linux arm64 | `12279215771` |
+| macOS x64 | `12278177116` |
+| macOS arm64 | `12278621301` |
+
+The four bundles are not the required complete six-target set.
+They were not downloaded during this monitoring pass.
+Tasks T031 through T037 remain unchecked; no application, installer, verifier, or workflow code was changed during monitoring.
+
+### Local correction after the third run
+
+The integration assertion compared the shortcut's resolved target with a path rooted in `os.tmpdir()`.
+Windows can report that temporary directory using an 8.3 alias while shell links report its expanded path.
+`path.resolve()` alone does not resolve filesystem aliases.
+The verifier now calls `fs.realpathSync.native()` on the temporary parent before creating its owned directory.
+Registry values, installation identity, payload probes, and shortcut expectations therefore use the same canonical installation path.
+The existing-installation refusal, protected-default checks, and owned-uninstall safeguards remain in place.
+
+A filesystem-alias regression failed before this correction.
+It now covers a real directory alias, a shell-expanded executable target, and a destination containing spaces.
+The integration assertion also reports all mismatched fields with expected and actual values rather than one combined error.
+It explicitly requires the shortcut and all five extension registrations, and retains quoted executable/document-argument checks.
+An additional native Windows regression obtains an actual 8.3 path through Windows Script Host.
+It reports an explicit skip on non-Windows hosts or volumes without an 8.3 alias; the cross-platform alias regression still runs.
+
+Under Node 24.22.0, 36 focused checks passed and the native Windows 8.3 check was explicitly skipped on macOS.
+The native regression's PowerShell probe passed syntax parsing.
+An initial check of the older local macOS packages correctly failed because their consumer guide no longer matched source.
+After rebuilding with `npm run dist:mac -- --arm64 --publish never`, both fresh macOS arm64 packages passed the actual verifier.
+That included native runtime and resource checks, signatures, DMG mounting/copying/detachment, and two-file staging with the canonical temporary root.
+Snapshots confirmed that packaging left the product manifests, authored guide, and license unchanged.
+
+These changes remain local; no commit, push, or CI rerun was performed.
+The latest hosted run still tests `e0d7035c7bf2d2d63212d633903ba93081f7dcda`, not this correction.
+The original compound error did not expose its mismatched field, so a new native Windows run is required to confirm the correction resolves that failure.
+Tasks T031 through T037 remain unchecked.

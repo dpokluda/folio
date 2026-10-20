@@ -10,6 +10,7 @@ const { readMetadata, packageNames, readArchitecture } = require('./package-meta
 const USAGE = 'Usage: node scripts/verify-packages.js --platform windows|linux|macos --arch x64|arm64 --directory release [--fedora 44]';
 const INNO_KEY = 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\com.dpokluda.folio_is1';
 const LEGACY_KEY = 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\9f5ff8db-51b6-575b-9468-75de01a1e384';
+const WINDOWS_EXTENSIONS = ['.md', '.markdown', '.mdown', '.mkd', '.mkdn'];
 const PROBE = 'JSON.stringify({arch:process.arch,electron:process.versions.electron})';
 const THEME_FILES = ['base.css', ...['fluent', 'github', 'word'].flatMap((family) => [
   `${family}/dynamic.css`, `${family}/a4.css`, `${family}/us-letter.css`,
@@ -235,7 +236,7 @@ $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey(
 try {
   $choices = @{}
   $extensions = @{}
-  foreach ($ext in @('.md', '.markdown', '.mdown', '.mkd', '.mkdn')) {
+  foreach ($ext in @('${WINDOWS_EXTENSIONS.join("', '")}')) {
     $key = $base.OpenSubKey('Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\' + $ext + '\\UserChoice')
     try {
       $choices[$ext] = if ($null -eq $key) { $null } else {
@@ -280,6 +281,35 @@ function hasWindowsRegistration(state) {
 function normalizedWindowsPath(value) {
   if (typeof value !== 'string' || !value) throw new Error('Windows installation did not report its owned path.');
   return path.resolve(value).replace(/[\\/]$/, '').toLowerCase();
+}
+
+function createVerificationDirectory(parent = os.tmpdir()) {
+  // Shell links can expand 8.3 aliases; use one canonical root for all recorded installation paths.
+  return fs.mkdtempSync(path.join(fs.realpathSync.native(parent), 'folio-verify-'));
+}
+
+function verifyWindowsIntegration(state, destination) {
+  const executable = path.join(destination, 'Folio.exe');
+  const mismatches = [];
+  const check = (label, actual, expected) => {
+    if (actual !== expected) {
+      mismatches.push(`${label}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}.`);
+    }
+  };
+  check('Markdown open command', state.command, `"${executable}" "%1"`);
+  check('Document icon', state.icon, `"${path.join(destination, 'resources/document.ico')}"`);
+  for (const extension of WINDOWS_EXTENSIONS) {
+    check(`OpenWithProgids ${extension}`, state.extensions?.[extension], true);
+  }
+  check('Registered application', state.registered, 'Software\\com.dpokluda.folio\\Capabilities');
+  check('Start menu shortcut', state.shortcutExists, true);
+  if (typeof state.shortcutTarget !== 'string' || !state.shortcutTarget ||
+      normalizedWindowsPath(state.shortcutTarget) !== normalizedWindowsPath(executable)) {
+    mismatches.push(`Start menu shortcut target: expected ${JSON.stringify(executable)}, received ${JSON.stringify(state.shortcutTarget)}.`);
+  }
+  if (mismatches.length) {
+    throw new Error(`Installed per-user shell integration is incomplete:\n${mismatches.join('\n')}`);
+  }
 }
 
 async function verifyWindowsInstaller(setup, metadata, arch, temporary, cleanup) {
@@ -330,13 +360,7 @@ async function verifyWindowsInstaller(setup, metadata, arch, temporary, cleanup)
   if (!isDeepStrictEqual(state.choices, before.choices)) {
     throw new Error('Installation changed an existing protected file-handler choice.');
   }
-  if (state.command !== `"${path.join(destination, 'Folio.exe')}" "%1"` ||
-      state.icon !== `"${path.join(destination, 'resources/document.ico')}"` ||
-      !Object.values(state.extensions).every(Boolean) ||
-      state.registered !== 'Software\\com.dpokluda.folio\\Capabilities' ||
-      normalizedWindowsPath(state.shortcutTarget) !== normalizedWindowsPath(path.join(destination, 'Folio.exe'))) {
-    throw new Error('Installed per-user Markdown registration, icon or Start menu shortcut is incomplete.');
-  }
+  verifyWindowsIntegration(state, destination);
   probePayload(destination, metadata, 'windows', arch);
 }
 
@@ -419,7 +443,7 @@ async function verifyPackages(options) {
   }
   const files = packageNames(metadata.version, options.platform, options.arch).map((name) => path.join(options.directory, name));
   for (const file of files) requireFile(file);
-  const temporary = fs.mkdtempSync(path.join(os.tmpdir(), 'folio-verify-'));
+  const temporary = createVerificationDirectory();
   const cleanup = [];
   let primary;
   try {
@@ -478,7 +502,10 @@ async function verifyPackages(options) {
   };
 }
 
-module.exports = { parseArguments, runCommand, inspectPayload, stagePackages, hasWindowsRegistration, verifyPackages };
+module.exports = {
+  parseArguments, runCommand, inspectPayload, stagePackages, hasWindowsRegistration,
+  createVerificationDirectory, verifyWindowsIntegration, verifyPackages,
+};
 
 if (require.main === module) {
   Promise.resolve().then(() => verifyPackages(parseArguments(process.argv.slice(2)))).then((result) => {

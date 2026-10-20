@@ -4,7 +4,10 @@
 
 **Created**: 2026-10-19
 
-**Status**: Implementation in progress; Linux and macOS CI targets pass, but both Windows jobs fail compiler provisioning. The shared engine-version correction is local; a complete successful CI run and remaining native qualification are pending.
+**Status**: Implementation in progress; Linux and macOS CI targets pass.
+Both Windows targets now build their archives and Inno installers, but fail installed shell-integration verification before upload.
+A local correction canonicalizes temporary installation paths and reports individual integration mismatches; Windows CI confirmation is pending.
+A complete successful CI run and remaining native qualification are pending.
 
 **Input**: First update Folio's source-controlled product version to 1.0 and create a simple consumer-specific `README.md` that is distributed with the application.
 These are product changes, not responsibilities of the pipeline.

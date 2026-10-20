@@ -375,6 +375,124 @@ test('Windows stateful verification guard refuses existing installations, handle
   ]) assert.equal(hasWindowsRegistration({ ...clean, ...changed }), true);
 });
 
+function windowsIntegrationFixture(destination) {
+  const extensions = require('../package.json').build.win.fileAssociations[0].ext;
+  return {
+    command: `"${path.join(destination, 'Folio.exe')}" "%1"`,
+    icon: `"${path.join(destination, 'resources/document.ico')}"`,
+    extensions: Object.fromEntries(extensions.map((ext) => [`.${ext}`, true])),
+    registered: 'Software\\com.dpokluda.folio\\Capabilities',
+    shortcutExists: true, shortcutTarget: path.join(destination, 'Folio.exe'),
+  };
+}
+
+test('verifier uses canonical installation paths when the shell expands a temporary directory alias', (t) => {
+  const { createVerificationDirectory, verifyWindowsIntegration } = require('../scripts/verify-packages');
+  const f = fixture(t);
+  const parent = path.join(f.root, 'temporary folder');
+  const alias = path.join(f.root, 'temporary alias');
+  fs.mkdirSync(parent);
+  fs.symlinkSync(parent, alias, process.platform === 'win32' ? 'junction' : 'dir');
+  const temporary = createVerificationDirectory(alias);
+  assert.equal(temporary, fs.realpathSync.native(temporary));
+  assert.equal(path.dirname(temporary), fs.realpathSync.native(parent));
+  assert.match(path.basename(temporary), /^folio-verify-/);
+  const destination = path.join(temporary, 'installed Folio');
+  const executable = write(destination, 'Folio.exe', binary('windows', 'x64'));
+  const shortcutTarget = fs.realpathSync.native(executable);
+  const aliasedDestination = path.join(alias, path.basename(temporary), 'installed Folio');
+  assert.throws(() => verifyWindowsIntegration({
+    ...windowsIntegrationFixture(aliasedDestination), shortcutTarget,
+  }, aliasedDestination), /Start menu shortcut target/);
+  assert.doesNotThrow(() => verifyWindowsIntegration({
+    ...windowsIntegrationFixture(destination), shortcutTarget,
+  }, destination));
+});
+
+test('Windows verifier expands an actual 8.3 temporary path before installation', {
+  skip: process.platform !== 'win32' ? 'Windows 8.3 paths require a native Windows filesystem.' : false,
+}, (t) => {
+  const { createVerificationDirectory, runCommand } = require('../scripts/verify-packages');
+  const f = fixture(t);
+  const parent = path.join(f.root, 'long temporary folder');
+  fs.mkdirSync(parent);
+  const shortPath = JSON.parse(runCommand('pwsh', ['-NoProfile', '-NonInteractive', '-Command', `
+$ErrorActionPreference = 'Stop'
+(New-Object -ComObject Scripting.FileSystemObject).GetFolder($env:FOLIO_TEST_PARENT).ShortPath |
+  ConvertTo-Json -Compress
+`], { env: { ...process.env, FOLIO_TEST_PARENT: parent } }));
+  assert.equal(typeof shortPath, 'string', 'The native filesystem probe must report a path.');
+  const canonicalParent = fs.realpathSync.native(parent);
+  if (shortPath.toLowerCase() === canonicalParent.toLowerCase()) {
+    t.skip('The fixture volume does not expose an 8.3 alias; the junction regression still applies.');
+    return;
+  }
+  const temporary = createVerificationDirectory(shortPath);
+  assert.equal(path.dirname(temporary), canonicalParent);
+  assert.equal(temporary, fs.realpathSync.native(temporary));
+});
+
+test('Windows integration verification accepts the complete quoted per-user registration', (t) => {
+  const { verifyWindowsIntegration } = require('../scripts/verify-packages');
+  const f = fixture(t);
+  const destination = path.join(f.root, 'installed Folio');
+  assert.doesNotThrow(() => verifyWindowsIntegration(windowsIntegrationFixture(destination), destination));
+});
+
+test('Windows integration verification reports every mismatched field with its actual value', (t) => {
+  const { verifyWindowsIntegration } = require('../scripts/verify-packages');
+  const f = fixture(t);
+  const destination = path.join(f.root, 'installed Folio');
+  const state = windowsIntegrationFixture(destination);
+  state.command = 'unquoted wrong command';
+  state.icon = null;
+  state.extensions['.markdown'] = false;
+  state.registered = 'Software\\Another.Application\\Capabilities';
+  state.shortcutTarget = path.join(f.root, 'another Folio', 'Folio.exe');
+  assert.throws(() => verifyWindowsIntegration(state, destination), (error) => {
+    for (const pattern of [/Markdown open command.*unquoted wrong command/, /Document icon.*null/,
+      /\.markdown.*false/, /Registered application.*Another/, /Start menu shortcut target.*another Folio/]) {
+      assert.match(error.message, pattern);
+    }
+    return true;
+  });
+});
+
+test('Windows integration verification rejects missing shortcuts and incomplete extension records', (t) => {
+  const { verifyWindowsIntegration } = require('../scripts/verify-packages');
+  const f = fixture(t);
+  const destination = path.join(f.root, 'installed Folio');
+  assert.throws(() => verifyWindowsIntegration({
+    ...windowsIntegrationFixture(destination), shortcutExists: false,
+  }, destination), /Start menu shortcut.*false/);
+  assert.throws(() => verifyWindowsIntegration({
+    ...windowsIntegrationFixture(destination), shortcutTarget: null,
+  }, destination), /Start menu shortcut target.*null/);
+  assert.throws(() => verifyWindowsIntegration({
+    ...windowsIntegrationFixture(destination), extensions: {},
+  }, destination), /OpenWithProgids.*\.md/);
+  for (const extension of Object.keys(windowsIntegrationFixture(destination).extensions)) {
+    const state = windowsIntegrationFixture(destination);
+    delete state.extensions[extension];
+    assert.throws(() => verifyWindowsIntegration(state, destination), (error) => {
+      assert.ok(error.message.includes(`OpenWithProgids ${extension}: expected true, received undefined.`));
+      return true;
+    });
+  }
+});
+
+test('Windows integration verification still requires the quoted executable and document argument', (t) => {
+  const { verifyWindowsIntegration } = require('../scripts/verify-packages');
+  const f = fixture(t);
+  const destination = path.join(f.root, 'installed Folio');
+  const executable = path.join(destination, 'Folio.exe');
+  for (const command of [`${executable} "%1"`, `"${executable}" %1`, `"${executable}" "%1" --extra`]) {
+    assert.throws(() => verifyWindowsIntegration({
+      ...windowsIntegrationFixture(destination), command,
+    }, destination), /Markdown open command/);
+  }
+});
+
 async function payloadFixture(t, { platform = process.platform === 'win32' ? 'windows' : 'macos', arch = 'arm64', asarFont = false } = {}) {
   const asar = require('@electron/asar');
   const f = fixture(t);
