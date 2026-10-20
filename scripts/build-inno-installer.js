@@ -11,6 +11,31 @@ function failure(command, result) {
   return new Error(`${command} failed with exit code ${result.status} ${result.signal || ''}: ${result.stderr || ''}`);
 }
 
+/** Verify the engine's reported version with a successful compile that emits no installer. */
+function checkCompiler(compiler, env = process.env, run = spawnSync) {
+  compiler = path.resolve(compiler);
+  if (!fs.existsSync(compiler) || !fs.statSync(compiler).isFile()) {
+    throw new Error(`Inno Setup compiler not found: ${compiler}`);
+  }
+  // PE version resources may be zero; the loaded engine's own report is authoritative.
+  const input = [
+    '[Setup]', 'AppName=Folio compiler check', `AppVersion=${INNO_VERSION}`,
+    'CreateAppDir=no', 'Uninstallable=no', 'Output=no', '',
+  ].join('\n');
+  const result = run(compiler, ['/O-', '-'], {
+    input, encoding: 'utf8', windowsHide: true, timeout: 30000,
+    cwd: path.dirname(compiler), env,
+  });
+  if (result.error || result.status !== 0) throw failure('Inno compiler probe', result);
+  const output = `${result.stdout || ''}\n${result.stderr || ''}`;
+  const reports = [...output.matchAll(/^Compiler engine version:[ \t]+Inno Setup[ \t]+(\d+\.\d+\.\d+(?:\.\d+)?)(?=[ \t\r\n]|$)/gm)];
+  if (reports.length !== 1 || ![INNO_VERSION, `${INNO_VERSION}.0`].includes(reports[0][1])) {
+    const actual = reports.map((report) => report[1]).join(', ') || 'no recognizable engine version';
+    throw new Error(`Inno Setup ${INNO_VERSION} is required; ${compiler} reports ${actual}.`);
+  }
+  return compiler;
+}
+
 function resolveCompiler(env, run) {
   const candidates = env.ISCC_PATH ? [env.ISCC_PATH] : [
     env.LOCALAPPDATA && path.join(env.LOCALAPPDATA, 'Programs', 'Inno Setup 6', 'ISCC.exe'),
@@ -25,17 +50,7 @@ function resolveCompiler(env, run) {
   if (!compiler) {
     throw new Error(`Inno Setup ${INNO_VERSION} compiler not found. Install it locally or set ISCC_PATH to ISCC.exe.`);
   }
-  compiler = path.resolve(compiler);
-  const result = run('pwsh', ['-NoProfile', '-NonInteractive', '-Command',
-    '(Get-Item -LiteralPath $env:FOLIO_ISCC_PATH).VersionInfo.FileVersion'], {
-    encoding: 'utf8', windowsHide: true, timeout: 30000,
-    env: { ...env, FOLIO_ISCC_PATH: compiler },
-  });
-  if (result.error || result.status !== 0) throw failure('Inno compiler version check', result);
-  if (!/^6\.7\.3(?:\.0)?$/.test(result.stdout.trim())) {
-    throw new Error(`Inno Setup ${INNO_VERSION} is required; ${compiler} reports ${result.stdout.trim()}.`);
-  }
-  return compiler;
+  return checkCompiler(compiler, env, run);
 }
 
 async function payloadChecks(directory, relative = '') {
@@ -120,3 +135,17 @@ async function buildInstallers(context, options = {}) {
 }
 
 module.exports = buildInstallers;
+module.exports.checkCompiler = checkCompiler;
+
+if (require.main === module) {
+  try {
+    const args = process.argv.slice(2);
+    if (args.length !== 2 || args[0] !== '--check-compiler') {
+      throw new Error('Usage: node scripts/build-inno-installer.js --check-compiler <ISCC.exe>');
+    }
+    console.log(`Verified Inno Setup ${INNO_VERSION}: ${checkCompiler(args[1])}`);
+  } catch (error) {
+    console.error(`[inno] ${error.message}`);
+    process.exitCode = 1;
+  }
+}

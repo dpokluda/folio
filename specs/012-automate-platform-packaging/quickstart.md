@@ -249,11 +249,11 @@ These safety paths still require native Windows qualification.
 | macOS arm64 package contents, signatures, native runtime, guide and local application flows | Pass on actual macOS 27.0.1; isolated test profiles and copied test-entry bootstrap where needed. This is not a claim that macOS 15 or the macOS 12 minimum was tested. |
 | Actual first-launch trust/SmartScreen/Gatekeeper approval | Not run against a freshly downloaded quarantined copy. |
 | macOS Intel package and desktop acceptance | Native macOS Intel CI package checks passed in the first run below; desktop acceptance is still not run. |
-| Windows x64/arm64 compiler, installer and genuine standard-user checks | The first native CI jobs failed contract tests before compiler provisioning; targeted fixes are local. Installer and genuine standard-user qualification remain pending. |
-| Fedora 44 x64/arm64 container, FUSE mount and desktop acceptance | Native Linux arm64 CI and Fedora 44 container probes passed. Linux x64 built both packages but failed the filename check before its Fedora probes. Desktop/FUSE-mount checks are not run. |
+| Windows x64/arm64 compiler, installer and genuine standard-user checks | Contract tests now pass; the second run failed the compiler's zero PE-version check. A shared engine-probe correction is local. Installer and genuine standard-user qualification remain pending. |
+| Fedora 44 x64/arm64 container, FUSE mount and desktop acceptance | Native Linux and Fedora 44 container probes passed for both architectures in the second run. Desktop/FUSE-mount checks are not run. |
 | Preserved local Linux deb generation | Configuration retained and checked by fixtures; native generation not run. |
-| Complete twelve-payload content and license audit | Pending; the first run uploaded three target bundles, not the complete six-bundle set. |
-| Live six-job Actions run, upload and rerun behavior | Automatically triggered by the user's merge; first run completed with three successes and three failures. See the run evidence below. No fix was committed or pushed by the agent. |
+| Complete twelve-payload content and license audit | Pending; no run has yet provided the complete six-bundle set. |
+| Live six-job Actions run, upload and rerun behavior | The first run had three successes; the second has four successes with both Windows jobs still failing. See the run evidence below. No fix was committed or pushed by the agent. |
 
 Tasks T031 through T037 remain unchecked until their required external/native evidence exists.
 The feature must not be marked fully implemented based only on these local results.
@@ -282,3 +282,20 @@ Lookups now normalize paths for the host API while retaining portable archive-en
 Content fixtures use a filesystem-compatible format; a dedicated POSIX permission test remains enforced on Linux/macOS and explicitly reports unsupported NTFS modeling on Windows.
 The Linux package naming contract now matches builder's format-specific `x86_64` spelling for x64 AppImages, with regression coverage for both naming and staging.
 These are local fixes, not a claim that a subsequent CI run has passed.
+
+### Second merged GitHub Actions run: Windows compiler-version check
+
+[Run 39438547388](https://github.com/dpokluda/folio/actions/runs/39438547388) built revision `2370d89b518af8e7b45d615a40d044d28bc11ebb`.
+Linux and macOS passed on both architectures, confirming the prior ASAR/fixture/AppImage naming corrections.
+Both Windows jobs passed their contract tests but failed compiler provisioning with `Expected compiler 6.7.3; installed compiler reports 0.0.0.0`.
+The affected jobs were `118681970094` (x64) and `118681969939` (arm64).
+They did not reach actual installer compilation.
+
+The pinned Inno source separates the CUI launcher from the compiler engine.
+Its PE version resources are zeroed in the tagged source, while the compiler exposes the real engine version during compilation.
+The `/?` help path is not a suitable substitute: it exits nonzero and does not print the engine-version report.
+The fix replaces both PE-property checks with one shared, successful no-output compilation probe, using the pinned compiler's supported `/O-` and standard-input script mode.
+It retains the installer SHA-256 and publisher-signature checks and rejects mismatched engine versions or failed probes.
+The regression for a `0.0.0.0` launcher was observed failing before this change.
+
+These changes remain local and uncommitted; a subsequent native Windows CI run is required before installer qualification is claimed.

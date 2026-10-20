@@ -211,12 +211,22 @@ function compilerFixture(t, version = '1.0.0') {
   return { ...f, compiler, context: { outDir: output, artifactPaths: [zip] } };
 }
 
-function TestCompiler(f, { version = '6.7.3.0', status = 0, omitOutput = false } = {}) {
+function TestCompiler(f, {
+  version = '6.7.3', peVersion = '0.0.0.0', probeStatus = 0, probeError = '',
+  status = 0, omitOutput = false,
+} = {}) {
   const calls = [];
-  const run = (command, args) => {
-    calls.push({ command, args });
-    if (command === 'pwsh') return { status: 0, stdout: version, stderr: '' };
+  const run = (command, args, options) => {
+    calls.push({ command, args, options });
+    if (command === 'pwsh') return { status: 0, stdout: peVersion, stderr: '' };
     assert.equal(command, f.compiler);
+    if (args.includes('-')) {
+      return {
+        status: probeStatus,
+        stdout: `Inno Setup 6 Command-Line Compiler\nCompiler engine version: Inno Setup ${version} (u)\n`,
+        stderr: probeError,
+      };
+    }
     if (status === 0 && !omitOutput) {
       write(f.context.outDir, packageNames(f.pkg.version, 'windows', 'x64')[1], 'New compiled setup');
     }
@@ -233,7 +243,7 @@ test('Inno builds only current Windows ZIP outputs and passes the source version
     root: f.root, platform: 'win32', env: { ISCC_PATH: f.compiler }, run: compiler.run,
   });
   assert.deepEqual(result, [path.join(f.context.outDir, packageNames('1.0.0', 'windows', 'x64')[1])]);
-  const args = compiler.calls.find((call) => call.command === f.compiler).args;
+  const args = compiler.calls.find((call) => call.args.some((arg) => arg.startsWith('/DProductVersion='))).args;
   assert.ok(args.includes('/DProductVersion=1.0.0'));
   assert.ok(args.includes('/DProductNumericVersion=1.0.0.0'));
   assert.ok(args.includes('/DTargetArch=x64'));
@@ -257,7 +267,7 @@ test('Inno consumes later source versions and verifies every installed payload f
   const result = await build(f.context, {
     root: f.root, platform: 'win32', env: { ISCC_PATH: f.compiler },
     run(command, args, options) {
-      if (command === f.compiler) {
+      if (command === f.compiler && args.some((arg) => arg.startsWith('/DPayloadChecks='))) {
         const include = args.find((arg) => arg.startsWith('/DPayloadChecks=')).slice('/DPayloadChecks='.length);
         checks = fs.readFileSync(include, 'utf8');
       }
@@ -268,6 +278,38 @@ test('Inno consumes later source versions and verifies every installed payload f
   assert.match(checks, /VerifyPayloadFile\('Folio\.exe', '[a-f0-9]{64}'\)/);
   assert.match(checks, /CanReplacePayloadFile\('Folio\.exe'\)/);
   assert.equal(fs.readdirSync(f.context.outDir).some((name) => name.startsWith('.inno-')), false);
+});
+
+test('Inno accepts the pinned engine when the launcher PE version is 0.0.0.0', async (t) => {
+  const build = require('../scripts/build-inno-installer');
+  const f = compilerFixture(t);
+  const compiler = TestCompiler(f, { peVersion: '0.0.0.0' });
+  const result = await build(f.context, {
+    root: f.root, platform: 'win32', env: { ISCC_PATH: f.compiler }, run: compiler.run,
+  });
+  assert.equal(result.length, 1);
+  assert.equal(compiler.calls.some((call) => call.command === 'pwsh'), false);
+  const probe = compiler.calls.find((call) => call.args.includes('-'));
+  assert.ok(probe.args.includes('/O-'));
+  assert.match(probe.options.input, /Output=no/);
+});
+
+test('Inno rejects the wrong engine even when the PE version claims the pinned version', async (t) => {
+  const build = require('../scripts/build-inno-installer');
+  const f = compilerFixture(t);
+  await assert.rejects(build(f.context, {
+    root: f.root, platform: 'win32', env: { ISCC_PATH: f.compiler },
+    run: TestCompiler(f, { peVersion: '6.7.3.0', version: '6.7.1' }).run,
+  }), /6\.7\.3.*6\.7\.1|6\.7\.1.*6\.7\.3/s);
+});
+
+test('Inno rejects failed probes instead of trusting a matching version banner', async (t) => {
+  const build = require('../scripts/build-inno-installer');
+  const f = compilerFixture(t);
+  await assert.rejects(build(f.context, {
+    root: f.root, platform: 'win32', env: { ISCC_PATH: f.compiler },
+    run: TestCompiler(f, { probeStatus: 7, probeError: 'deliberate probe failure' }).run,
+  }), /7.*deliberate probe failure|deliberate probe failure.*7/s);
 });
 
 test('Inno rejects an invalid compiler override, wrong version and wrong payload CPU', async (t) => {
@@ -445,4 +487,13 @@ test('builder configuration preserves all formats and source-derived filename co
   assert.match(iss, /PrivilegesRequired=lowest/);
   assert.match(iss, /CloseApplications=no/);
   assert.doesNotMatch(iss, /CloseApplications=force|Subkey:.*\\UserChoice/);
+});
+
+test('CI compiler provisioning delegates to the same engine checker as local builds', () => {
+  const provisioning = fs.readFileSync(path.join(source, '.github/scripts/setup-inno.ps1'), 'utf8');
+  assert.match(provisioning, /scripts\/build-inno-installer\.js/);
+  assert.match(provisioning, /& node \$checker --check-compiler \$compiler/);
+  assert.doesNotMatch(provisioning, /VersionInfo\.FileVersion/);
+  assert.match(provisioning, /Get-FileHash -LiteralPath \$download -Algorithm SHA256/);
+  assert.match(provisioning, /Get-AuthenticodeSignature -LiteralPath \$download/);
 });

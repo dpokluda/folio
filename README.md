@@ -162,9 +162,11 @@ Build artifacts are written to `release/`.
 
 `npm run dist` and the host-specific variant are equivalent.
 Use the native host and an explicit `--x64` or `--arm64` flag for a distribution build.
-Windows full packaging also requires PowerShell 7 and Inno Setup **6.7.3**.
+Windows full packaging also requires Inno Setup **6.7.3**.
+PowerShell 7 is needed for Windows package verification, CI provisioning, and the optional one-shot script.
 Install the compiler from its official release and set `ISCC_PATH` to its `ISCC.exe` if it is not found in a normal installation location.
 Local packaging never downloads or installs the compiler automatically; cross-host Inno compilation is not configured.
+Compiler validation uses a no-output compilation and checks the engine's reported version, not the launcher's PE file version, which can be `0.0.0.0`.
 
 ```sh
 npm run dist:mac -- --arm64 --publish never

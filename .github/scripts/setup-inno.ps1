@@ -41,9 +41,10 @@ if ($process.ExitCode -ne 0) {
     throw "Inno Setup compiler installation failed with exit code $($process.ExitCode)."
 }
 $compiler = Join-Path $destination 'ISCC.exe'
-$actualVersion = (Get-Item -LiteralPath $compiler).VersionInfo.FileVersion
-if ($actualVersion.Trim() -notmatch '^6\.7\.3(?:\.0)?$') {
-    throw "Expected compiler $version; installed compiler reports $actualVersion."
+$checker = Join-Path $PSScriptRoot '../../scripts/build-inno-installer.js'
+& node $checker --check-compiler $compiler
+if ($LASTEXITCODE -ne 0) {
+    throw "Inno Setup $version engine verification failed with exit code $LASTEXITCODE."
 }
 Add-Content -LiteralPath $env:GITHUB_ENV -Value "ISCC_PATH=$compiler" -Encoding utf8
 Remove-Item -LiteralPath $download -Force

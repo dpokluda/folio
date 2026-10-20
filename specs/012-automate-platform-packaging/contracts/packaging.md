@@ -71,6 +71,10 @@ Generated renderer and KaTeX assets must still be present for offline operation.
 Use compiler `6.7.3`, resolved through explicit `ISCC_PATH` or a verified supported local installation.
 An explicitly supplied invalid compiler path fails; it does not silently select a different version.
 Local packaging never downloads or installs the compiler itself.
+Both CI provisioning and the local hook call the same engine checker in `scripts/build-inno-installer.js`.
+It compiles a minimal standard-input probe with output disabled and requires the engine to report `6.7.3`.
+The launcher's PE `FileVersion` is not a compiler-version contract.
+The diagnostic CLI is `node scripts/build-inno-installer.js --check-compiler <ISCC.exe>`.
 
 The post-build hook receives electron-builder's actual current-invocation output.
 For each completed Windows ZIP, select its matching completed unpacked payload and verify `Folio.exe` architecture.
