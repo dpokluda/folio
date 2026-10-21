@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { spawnSync } = require('node:child_process');
+const { spawnSync, execFileSync } = require('node:child_process');
 const test = require('node:test');
 const { readMetadata, packageNames, readArchitecture } = require('../scripts/package-metadata');
 
@@ -206,6 +206,7 @@ function compilerFixture(t, version = '1.0.0') {
   const output = path.join(f.root, 'release');
   const zip = write(output, packageNames(version, 'windows', 'x64')[0], 'ZIP fixture');
   write(output, 'win-unpacked/Folio.exe', binary('windows', 'x64'));
+  write(output, 'win-unpacked/README.md', fs.readFileSync(path.join(f.root, 'docs/user/README.md')));
   write(f.root, 'build/windows/folio.iss', 'Compiler fixture');
   const compiler = write(f.root, 'tools with spaces/ISCC.exe', 'Compiler fixture');
   return { ...f, compiler, context: { outDir: output, artifactPaths: [zip] } };
@@ -276,6 +277,7 @@ test('Inno consumes later source versions and verifies every installed payload f
   });
   assert.ok(result[0].includes('1.1.0-rc.1+fixture'));
   assert.match(checks, /VerifyPayloadFile\('Folio\.exe', '[a-f0-9]{64}'\)/);
+  assert.match(checks, /VerifyPayloadFile\('README\.md', '[a-f0-9]{64}'\)/);
   assert.match(checks, /CanReplacePayloadFile\('Folio\.exe'\)/);
   assert.equal(fs.readdirSync(f.context.outDir).some((name) => name.startsWith('.inno-')), false);
 });
@@ -504,6 +506,9 @@ async function payloadFixture(t, { platform = process.platform === 'win32' ? 'wi
   fs.chmodSync(executable, 0o755);
   fs.mkdirSync(resources, { recursive: true });
   fs.copyFileSync(path.join(f.root, 'docs/user/README.md'), path.join(resources, 'README.md'));
+  if (platform !== 'macos') {
+    fs.copyFileSync(path.join(f.root, 'docs/user/README.md'), path.join(app, 'README.md'));
+  }
   fs.copyFileSync(path.join(f.root, 'LICENSE'), path.join(resources, 'LICENSE'));
   for (const file of themeFiles) {
     write(resources, `themes/${file}`, fs.readFileSync(path.join(f.root, 'themes', file)));
@@ -547,6 +552,124 @@ test('verifier rejects missing assets and restricted fonts in either packaged th
   assert.throws(() => inspectPayload(f.app, f.metadata, f.platform, 'arm64'), /word\.css/);
 });
 
+test('verifier requires the visible README beside Windows and Linux executables', async (t) => {
+  const { inspectPayload } = require('../scripts/verify-packages');
+  const platforms = process.platform === 'win32' ? ['windows'] : ['windows', 'linux'];
+  for (const platform of platforms) {
+    const f = await payloadFixture(t, { platform });
+    const readme = path.join(f.app, 'README.md');
+    fs.unlinkSync(readme);
+    assert.throws(() => inspectPayload(f.app, f.metadata, platform, 'arm64'), /README/);
+    fs.writeFileSync(readme, 'A stale or different guide');
+    assert.throws(() => inspectPayload(f.app, f.metadata, platform, 'arm64'), /guide|README/i);
+  }
+});
+
+function macArchiveFixture(t, arch = 'arm64') {
+  const { runCommand } = require('../scripts/verify-packages');
+  const f = fixture(t);
+  const input = path.join(f.root, 'archive input');
+  const app = path.join(input, 'Folio.app');
+  const executable = write(app, 'Contents/MacOS/Folio', binary('macos', arch));
+  fs.chmodSync(executable, 0o755);
+  const guide = fs.readFileSync(path.join(f.root, 'docs/user/README.md'));
+  write(app, 'Contents/Resources/README.md', guide);
+  write(app, 'Contents/Frameworks/Test.framework/Versions/A/data', 'Signed payload bytes');
+  fs.symlinkSync('A', path.join(app, 'Contents/Frameworks/Test.framework/Versions/Current'));
+  fs.symlinkSync('Versions/Current/data', path.join(app, 'Contents/Frameworks/Test.framework/data'));
+  const archive = path.join(f.root, 'release', packageNames(f.pkg.version, 'macos', arch)[0]);
+  fs.mkdirSync(path.dirname(archive));
+  runCommand('tar', ['-czf', archive, '-C', input, 'Folio.app'], {
+    env: { ...process.env, COPYFILE_DISABLE: '1' },
+  });
+  return {
+    ...f, archive, guide,
+    event: { file: archive, target: { name: 'tar.gz' }, packager: { platform: { nodeName: 'darwin' } } },
+  };
+}
+
+test('macOS tarballs expose the authored README beside an unchanged application bundle', {
+  skip: process.platform !== 'darwin' ? 'The macOS archive hook uses native macOS tar.' : false,
+}, async (t) => {
+  const { runCommand } = require('../scripts/verify-packages');
+  for (const arch of ['x64', 'arm64']) {
+    const f = macArchiveFixture(t, arch);
+    const hook = require('../package.json').build.artifactBuildCompleted;
+    if (hook) {
+      const addReadme = require(path.join(source, hook));
+      await addReadme(f.event, { root: f.root });
+      const completed = fs.readFileSync(f.archive);
+      await addReadme(f.event, { root: f.root });
+      assert.deepEqual(fs.readFileSync(f.archive), completed);
+    }
+    const extracted = path.join(f.root, 'extracted');
+    fs.mkdirSync(extracted);
+    runCommand('tar', ['-xzf', f.archive, '-C', extracted]);
+    assert.deepEqual(fs.readdirSync(extracted).sort(), ['Folio.app', 'README.md']);
+    assert.deepEqual(fs.readFileSync(path.join(extracted, 'README.md')), f.guide);
+    const app = path.join(extracted, 'Folio.app');
+    assert.deepEqual(fs.readFileSync(path.join(app, 'Contents/Resources/README.md')), f.guide);
+    assert.deepEqual(fs.readFileSync(path.join(app, 'Contents/MacOS/Folio')), binary('macos', arch));
+    assert.equal(fs.statSync(path.join(app, 'Contents/MacOS/Folio')).mode & 0o777, 0o755);
+    assert.equal(fs.readlinkSync(path.join(app, 'Contents/Frameworks/Test.framework/Versions/Current')), 'A');
+    assert.equal(fs.readlinkSync(path.join(app, 'Contents/Frameworks/Test.framework/data')), 'Versions/Current/data');
+    assert.equal(fs.readFileSync(path.join(app, 'Contents/Frameworks/Test.framework/data'), 'utf8'), 'Signed payload bytes');
+    assert.deepEqual(fs.readFileSync(path.join(f.root, 'docs/user/README.md')), f.guide);
+  }
+});
+
+test('archive README hook ignores DMGs and non-macOS targets and refuses cross-host macOS work', async (t) => {
+  const addReadme = require('../scripts/add-mac-archive-readme');
+  const f = fixture(t);
+  const file = write(f.root, 'unchanged package', 'Original artifact bytes');
+  for (const [platform, target] of [['darwin', 'dmg'], ['darwin', 'dir'], ['linux', 'tar.gz'], ['win32', 'zip']]) {
+    await addReadme({ file, target: { name: target }, packager: { platform: { nodeName: platform } } }, { root: f.root });
+    assert.equal(fs.readFileSync(file, 'utf8'), 'Original artifact bytes');
+  }
+  await assert.rejects(addReadme({
+    file, target: { name: 'tar.gz' }, packager: { platform: { nodeName: 'darwin' } },
+  }, { root: f.root, platform: 'linux' }), /native macOS/);
+});
+
+test('macOS archive README failures preserve the original artifact and remove owned temporary files', {
+  skip: process.platform !== 'darwin' ? 'The macOS archive hook uses native macOS tar.' : false,
+}, async (t) => {
+  const addReadme = require('../scripts/add-mac-archive-readme');
+  const f = macArchiveFixture(t);
+  const original = fs.readFileSync(f.archive);
+  await assert.rejects(addReadme(f.event, {
+    root: f.root,
+    run(command, args, options) {
+      if (args.includes('-rf')) throw new Error('Deliberate tar append failure');
+      return execFileSync(command, args, options);
+    },
+  }), /Deliberate tar append failure/);
+  assert.deepEqual(fs.readFileSync(f.archive), original);
+  fs.writeFileSync(f.archive, 'Invalid gzip data');
+  await assert.rejects(addReadme(f.event, { root: f.root }), /header|gzip|compression/i);
+  assert.equal(fs.readFileSync(f.archive, 'utf8'), 'Invalid gzip data');
+  assert.deepEqual(fs.readdirSync(path.dirname(f.archive)), [path.basename(f.archive)]);
+  assert.deepEqual(fs.readFileSync(path.join(f.root, 'docs/user/README.md')), f.guide);
+});
+
+test('DMG verification permits only the app and Applications shortcut as visible entries', {
+  skip: process.platform === 'win32' ? 'The DMG layout uses a POSIX Applications symlink.' : false,
+}, (t) => {
+  const { inspectDmgLayout } = require('../scripts/verify-packages');
+  const f = fixture(t);
+  const mount = path.join(f.root, 'mounted image');
+  fs.mkdirSync(path.join(mount, 'Folio.app'), { recursive: true });
+  fs.symlinkSync('/Applications', path.join(mount, 'Applications'));
+  write(mount, '.DS_Store', 'Normal hidden Finder metadata');
+  inspectDmgLayout(mount);
+  write(mount, 'README.md', 'An unwanted DMG-root guide');
+  assert.throws(() => inspectDmgLayout(mount), /DMG.*layout|visible.*DMG/i);
+  fs.unlinkSync(path.join(mount, 'README.md'));
+  fs.unlinkSync(path.join(mount, 'Applications'));
+  fs.symlinkSync('/tmp', path.join(mount, 'Applications'));
+  assert.throws(() => inspectDmgLayout(mount), /Applications/);
+});
+
 test('verifier rejects POSIX payloads without executable permissions', {
   skip: process.platform === 'win32' ? 'Windows cannot represent POSIX executable permission bits.' : false,
 }, async (t) => {
@@ -587,6 +710,13 @@ test('builder configuration preserves all formats and source-derived filename co
   assert.equal(pkg.build.win.target, 'zip');
   assert.deepEqual(pkg.build.mac.target, ['dmg', 'tar.gz']);
   assert.deepEqual(pkg.build.linux.target, ['AppImage', 'tar.gz', 'deb']);
+  for (const platform of ['win', 'linux']) {
+    assert.deepEqual(pkg.build[platform].extraFiles, [{ from: 'docs/user/README.md', to: 'README.md' }]);
+  }
+  assert.equal(pkg.build.artifactBuildCompleted, 'scripts/add-mac-archive-readme.js');
+  assert.equal(pkg.build.mac.extraFiles, undefined);
+  assert.equal(pkg.build.mac.extraDistFiles, undefined);
+  assert.equal(pkg.build.dmg, undefined);
   for (const [platform, key, extension, index] of [
     ['windows', 'win', 'zip', 0], ['linux', 'linux', 'tar.gz', 0], ['linux', 'linux', 'AppImage', 1],
     ['macos', 'mac', 'tar.gz', 0], ['macos', 'mac', 'dmg', 1],

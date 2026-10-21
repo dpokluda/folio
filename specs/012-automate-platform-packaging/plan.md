@@ -111,6 +111,7 @@ build/windows/folio.iss            # New Inno Setup definition
 scripts/
 |-- package-metadata.js            # New shared source-version and expected-output checks
 |-- build-inno-installer.js        # New afterAllArtifactBuild hook
+|-- add-mac-archive-readme.js       # Visible README beside the signed app in macOS tar.gz only
 |-- verify-packages.js             # New target-package validation and staging
 |-- run-electron-builder.js        # Existing wrapper; add metadata/guide preflight only
 |-- ensure-electron.js             # Preserve self-repair
@@ -136,6 +137,8 @@ First update the product version and matching lockfile metadata to `1.0.0`.
 Refresh Electron within major 43 to the researched supported minor, without updating unrelated dependencies or migrating builder schemas.
 Author `docs/user/README.md`, copy it as an ordinary packaged resource, and add `Help > User Guide` through the current guarded built-in document flow.
 Copy the existing MIT `LICENSE` alongside the guide.
+Also copy the guide beside Windows/Linux executables and beside `Folio.app` in the macOS tar.gz, without changing startup behavior.
+Keep the DMG's visible content limited to the app and Applications shortcut; its internal Help guide travels with the copied app.
 Keep the root README, disclaimer, acknowledgements, and contributor material; add links rather than replacing it wholesale.
 
 Demonstrate these changes with the existing local start and packaging commands before introducing the workflow.
@@ -154,6 +157,11 @@ Use `afterAllArtifactBuild` to compile Inno Setup after the current invocation's
 The hook handles only ZIPs reported by that build, validates their matching payload architecture, and returns the setup paths.
 Unpacked-only `--dir` builds do not require Inno Setup.
 Compiler failures are not retried as packaging locks and never yield a success-shaped result.
+
+Use platform-specific `extraFiles` for the Windows/Linux root README.
+The pinned builder does not support `extraDistFiles` for tar targets, so use a focused `artifactBuildCompleted` hook for macOS tar.gz.
+Append the guide to its uncompressed tar stream and atomically replace the recompressed output, leaving signed app bytes and the DMG untouched.
+Do not process stale artifacts or require this hook for unpacked-only builds.
 
 Use explicit platform/architecture filenames and ordinary resource copies described in [the packaging contract](./contracts/packaging.md).
 Close the known font exclusion gap in the unused ASAR theme copy as well as retaining the external resource filter.

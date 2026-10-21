@@ -28,9 +28,10 @@ Windows numeric file-version fields may use the normal equivalent four-part repr
 | ----- | ---- |
 | Source | `docs/user/README.md`, authored before automation. |
 | Installed name | `README.md` in the application's ordinary resources directory. |
+| Visible copy | Beside the Windows/Linux executable; beside `Folio.app` in macOS tar.gz only. No external DMG or AppImage sidecar. |
 | Integrity | Packaged bytes match the guide read from that checked-out source. |
 | Access | `Help > User Guide`, offline, through the guarded built-in document path. |
-| Editing state | Untitled buffer; saving requires Save As and cannot overwrite the shipped guide. |
+| Help document state | Untitled buffer; saving requires Save As and cannot overwrite the internal guide. |
 
 The guide has no generation state or pipeline-owned version.
 The existing root MIT `LICENSE` accompanies it as a separate ordinary resource.

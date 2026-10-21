@@ -184,6 +184,11 @@ Names include product version, operating system, and architecture, for example `
 Windows ZIPs contain the whole Electron application; keep their companion files together.
 macOS archives contain the complete `.app`, and Linux archives contain the `folio` executable and its companion files.
 The source consumer guide is copied as ordinary `README.md` resources, together with `LICENSE`, and remains accessible through Help after installation.
+Archives also expose `README.md` beside the application so it can be read before launching Folio.
+On Windows/Linux it is beside the executable; the Windows installer includes that copy too.
+On macOS it is beside `Folio.app` in the tar.gz, while the DMG keeps only the app and Applications shortcut.
+The macOS archive hook in `scripts/add-mac-archive-readme.js` adds this copy without changing the signed app bundle.
+This packaging change does not alter startup behavior or add an automatic guide-opening step.
 Word-style personal TTF fonts are excluded from both the ASAR and external theme copies.
 
 The Windows installer uses the finished electron-builder payload, registers the existing `Folio.Markdown` handler and document icon per user, and does not change PATH or force the user's default app.

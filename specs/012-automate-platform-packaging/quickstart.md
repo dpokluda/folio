@@ -383,5 +383,33 @@ The new regressions failed against the former one-bundle upload and missing per-
 After the correction, 38 checks passed under Node 24.22.0, with the native Windows 8.3 probe explicitly skipped on macOS.
 The workflow metadata and summary scripts were exercised with LF/CRLF source and executed for all six targets at current and later source versions.
 The updated workflow passed actionlint 1.7.12.
-The direct-file presentation has not yet run in hosted CI, and no existing hosted artifact was renamed or deleted.
+At that checkpoint, the direct-file presentation had not yet run in hosted CI, and no existing hosted artifact was renamed or deleted.
 The agent did not stage, commit, push, or start a workflow run.
+
+### Visible archive README follow-up
+
+The user reported successful Windows setup/ZIP and macOS DMG/tar.gz use before this layout change.
+The report did not identify architectures, OS versions, or every desktop acceptance scenario, so it does not close the full native matrix.
+This follow-up started from a clean checkout at `beffb609ee6aca581a94a2c931d68141b48c7b72`.
+
+The authored guide is now copied beside Windows/Linux executables and beside `Folio.app` in macOS tar.gz.
+Windows setup includes the executable-adjacent copy through its existing complete-payload installation.
+The internal resource copy remains the source for Help; application startup code and default document behavior were not changed.
+The DMG retains only the app and Applications shortcut as visible entries, with ordinary hidden Finder metadata allowed.
+The guide's license wording now points to the application resources directory rather than assuming every README is beside `LICENSE`.
+
+The pinned builder documents that `extraDistFiles` does not apply to tar targets.
+A focused artifact-completion hook appends the guide to the uncompressed macOS tar stream and atomically replaces the recompressed file.
+It does not unpack or rewrite signed app files, and ignores DMGs, unpacked-only output, and non-macOS targets.
+Regressions cover guide contents, both macOS architecture labels, executable modes, framework symlinks, idempotence, and failure cleanup.
+Missing visible guides and the former tarball layout were observed failing before implementation.
+
+Node 24.22.0 passed 43 focused checks, with the native Windows 8.3 probe explicitly skipped on this macOS host.
+Fresh macOS arm64 tar.gz and DMG outputs passed the actual package verifier, including signatures and native runtime probes.
+The archive's external and internal guides matched the final authored source.
+The DMG's two-item visible layout, copied-app validation, and owned mount detachment all succeeded.
+Snapshots confirmed that packaging left both product manifests, the authored guide, and license unchanged.
+
+Native Windows/Linux builds and a real macOS Intel build of this follow-up were not run locally.
+Those remain for the next authorized CI run; no stage, commit, push, or hosted rerun was performed.
+Tasks T031 through T037 retain their remaining qualification gates.

@@ -83,6 +83,7 @@ function inspectPayload(app, metadata, platform, arch) {
     throw new Error(`Archive lost application executable permissions: ${executable}`);
   }
   sameBytes(path.join(resources, 'README.md'), metadata.guidePath, 'Consumer guide');
+  if (platform !== 'macos') sameBytes(path.join(app, 'README.md'), metadata.guidePath, 'Visible consumer guide');
   sameBytes(path.join(resources, 'LICENSE'), metadata.licensePath, 'Product license');
   for (const file of THEME_FILES) {
     sameBytes(path.join(resources, 'themes', file), path.join(metadata.root, 'themes', file), `Theme ${file}`);
@@ -383,6 +384,19 @@ function mountedAt(mount, parent) {
   return fs.existsSync(mount) && fs.statSync(mount).dev !== fs.statSync(parent).dev;
 }
 
+/** Require the two-item drag-to-Applications layout while allowing hidden Finder metadata. */
+function inspectDmgLayout(mount) {
+  const visible = fs.readdirSync(mount).filter((name) => !name.startsWith('.')).sort();
+  if (!isDeepStrictEqual(visible, ['Applications', 'Folio.app']) ||
+      !fs.lstatSync(path.join(mount, 'Folio.app')).isDirectory()) {
+    throw new Error(`Unexpected visible DMG layout: ${visible.join(', ')}. Expected only Folio.app and Applications.`);
+  }
+  const shortcut = path.join(mount, 'Applications');
+  if (!fs.lstatSync(shortcut).isSymbolicLink() || fs.readlinkSync(shortcut) !== '/Applications') {
+    throw new Error('The DMG Applications shortcut must point to /Applications.');
+  }
+}
+
 function verifyDmg(file, metadata, arch, temporary, cleanup) {
   const mount = path.join(temporary, 'dmg-mount');
   fs.mkdirSync(mount);
@@ -392,6 +406,7 @@ function verifyDmg(file, metadata, arch, temporary, cleanup) {
   });
   runCommand('hdiutil', ['attach', '-readonly', '-nobrowse', '-mountpoint', mount, file]);
   attached = true;
+  inspectDmgLayout(mount);
   const app = locateApp(mount, 'macos');
   verifyMacApp(app, metadata, arch);
   const copy = path.join(temporary, 'copied-dmg', 'Folio.app');
@@ -459,6 +474,7 @@ async function verifyPackages(options) {
     }
     const archivedApp = locateApp(archiveDirectory, platform);
     if (platform === 'macos') {
+      sameBytes(path.join(path.dirname(archivedApp), 'README.md'), metadata.guidePath, 'Visible archive guide');
       verifyMacApp(archivedApp, metadata, options.arch);
       verifyDmg(files[1], metadata, options.arch, temporary, cleanup);
     } else if (platform === 'windows') {
@@ -503,7 +519,7 @@ async function verifyPackages(options) {
 }
 
 module.exports = {
-  parseArguments, runCommand, inspectPayload, stagePackages, hasWindowsRegistration,
+  parseArguments, runCommand, inspectPayload, inspectDmgLayout, stagePackages, hasWindowsRegistration,
   createVerificationDirectory, verifyWindowsIntegration, verifyPackages,
 };
 

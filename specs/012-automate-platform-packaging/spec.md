@@ -5,7 +5,7 @@
 **Created**: 2026-10-19
 
 **Status**: Implementation in progress; all six native packaging targets passed CI in run `39509976546`.
-The user-requested Anniversary-style direct-file artifact uploads are implemented locally and await a new CI run.
+The visible archive README layout is implemented locally; its Windows/Linux native packaging checks await a new CI run.
 Remaining native desktop and installation qualification is pending.
 
 **Input**: First update Folio's source-controlled product version to 1.0 and create a simple consumer-specific `README.md` that is distributed with the application.
@@ -183,6 +183,10 @@ Install or extract, launch Folio, open a Markdown file, switch between preview a
   Recipients MUST NOT need a development toolchain or separately installed application runtime; supported operating-system libraries and documented first-launch approval remain prerequisites.
 - **FR-012**: A consumer-specific guide MUST be authored and maintained in the product source as a separate deliverable before adding the pipeline.
   Both local and automated packages MUST carry that guide as `README.md`.
+  Windows/Linux payloads MUST expose an additional copy beside the executable, and macOS tar.gz MUST expose it beside `Folio.app`.
+  Windows setup MUST install the executable-adjacent copy.
+  The DMG MUST show only the app and Applications shortcut, while retaining its internal Help guide.
+  These packaging copies MUST NOT change the initial document or automatically open the guide at startup.
   The pipeline MUST package the existing guide, not author, generate, or rewrite its contents.
   A missing guide MUST cause a clear packaging failure.
   The guide MUST remain available locally with the installed or standalone application rather than existing only on installation media or in the repository.

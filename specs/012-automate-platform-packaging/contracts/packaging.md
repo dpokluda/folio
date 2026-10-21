@@ -47,18 +47,31 @@ Other local outputs may exist, but only these twelve payload files are published
 
 Every package contains a complete application, including its companion libraries and application resources.
 Windows ZIP is not a single-executable product.
-macOS tar.gz contains the complete `Folio.app`; extraction preserves bundle structure, symlinks, modes, and signatures.
+macOS tar.gz contains the complete `Folio.app` and a sibling `README.md`; extraction preserves bundle structure, symlinks, modes, and signatures.
 Linux tar.gz contains the runnable `folio` application and its companions; executable modes are preserved.
 AppImage is a runnable distribution file, not automatic desktop-menu installation.
 
 | Resource | Windows/Linux application payload | macOS application bundle |
 | -------- | --------------------------------- | ------------------------ |
-| Consumer guide | `resources/README.md` | `Contents/Resources/README.md` |
+| Help guide copy | `resources/README.md` | `Contents/Resources/README.md` |
 | Product MIT license | `resources/LICENSE` | `Contents/Resources/LICENSE` |
 | Active themes | `resources/themes/` | `Contents/Resources/themes/` |
 | Product metadata and bundled documents | `resources/app.asar` | `Contents/Resources/app.asar` |
 | Windows association icon | `resources/document.ico` | Not applicable. |
 | macOS document icon | Not applicable. | Existing `Contents/Resources/document.icns`. |
+
+Windows and Linux application payloads also contain `README.md` beside the executable, copied from the same authored guide.
+The Windows installer includes this visible copy in its application directory.
+The macOS tar.gz has `README.md` beside `Folio.app`, not inside a new application-bundle location.
+The DMG's only visible root entries are `Folio.app` and a shortcut to `/Applications`; hidden Finder metadata is allowed.
+AppImage remains one downloadable file, with the internal Help guide and no separately published README sidecar.
+These copies do not change startup content or automatically open the guide.
+
+The pinned builder's `extraDistFiles` option does not apply to tar targets.
+The `artifactBuildCompleted` hook in `scripts/add-mac-archive-readme.js` handles only the current macOS tar.gz.
+It decompresses the tar stream, appends the authored guide using native macOS tar, and atomically replaces the recompressed archive.
+It does not extract or rewrite signed app files, symlinks, or executable modes, and it never modifies the DMG.
+Failure preserves the original artifact and reports any owned-temporary cleanup error.
 
 Archive wrapper folders and AppImage internal layout may differ; the verifier locates exactly one application payload and validates its resource directory.
 Do not change existing application IDs, executable names, document declarations, or user-data identity.

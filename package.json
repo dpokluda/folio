@@ -85,11 +85,18 @@
     "directories": {
       "output": "release"
     },
+    "artifactBuildCompleted": "scripts/add-mac-archive-readme.js",
     "afterAllArtifactBuild": "scripts/build-inno-installer.js",
     "win": {
       "target": "zip",
       "artifactName": "${productName}-${version}-windows-${arch}.${ext}",
       "icon": "build/icons/icon.ico",
+      "extraFiles": [
+        {
+          "from": "docs/user/README.md",
+          "to": "README.md"
+        }
+      ],
       "extraResources": [
         {
           "from": "build/icons/document.ico",
@@ -161,7 +168,13 @@
       ],
       "artifactName": "${productName}-${version}-linux-${arch}.${ext}",
       "category": "Office",
-      "icon": "build/icons/icon.png"
+      "icon": "build/icons/icon.png",
+      "extraFiles": [
+        {
+          "from": "docs/user/README.md",
+          "to": "README.md"
+        }
+      ]
     }
   },
   "allowScripts": {

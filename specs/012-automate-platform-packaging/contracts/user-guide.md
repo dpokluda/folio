@@ -9,6 +9,11 @@ Create it as a product change before adding the workflow.
 Do not replace the long repository README or have CI generate another consumer document.
 Both local and automated packages copy the authored guide as ordinary `README.md` resources using [the packaging layout](./packaging.md).
 The guide stays with the application after a DMG is ejected, an archive is deleted, or the source repository is unavailable.
+Archives also expose the same guide beside the executable, or beside `Folio.app` in the macOS tar.gz.
+Windows setup includes the executable-adjacent copy too.
+The DMG remains the familiar app-and-Applications layout, without an external README.
+The visible file is an ordinary additional copy; Help continues to load its protected internal resource.
+Do not change the initial document, empty-window content, or startup flow, and do not automatically open the guide.
 
 The guide is concise English Markdown, written for someone using the app.
 It is self-contained: core instructions do not depend on repository images, build scripts, external web pages, or a network connection.

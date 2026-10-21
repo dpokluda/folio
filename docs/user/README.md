@@ -19,8 +19,11 @@ Fedora 44 is the Linux compatibility reference; other distributions need compati
 
 Each target also has an archive: `.zip` on Windows and `.tar.gz` on macOS/Linux.
 Extract the complete archive.
+Its README is beside the application: next to `Folio.exe` or `folio`, or beside `Folio.app` on macOS.
 On Windows run `Folio.exe` and keep all companion files together; on macOS open the extracted `Folio.app`; on Linux run `./folio` from its extracted folder.
 Archive use does not create a separate portable-settings mode.
+Windows setup also installs a README beside `Folio.exe`.
+The macOS DMG shows only Folio and the Applications shortcut; the copied app retains this guide through **Help > User Guide**.
 Downloads name the product version, operating system, and architecture, such as `Folio-1.0.0-windows-arm64-setup.exe`.
 GitHub Actions lists each package by its filename and downloads it directly.
 Older runs may wrap packages in another ZIP; extract that outer ZIP first to get the actual package files.
@@ -108,7 +111,8 @@ Delete the preferences folder separately only if you want to reset your settings
 
 ## License and support
 
-Folio is free and open source under the MIT License; the full notice is in the bundled `LICENSE` next to this README.
+Folio is free and open source under the MIT License.
+The full notice is bundled as `LICENSE` in the application's resources directory.
 Source and issues: https://github.com/dpokluda/folio
 
 Folio is not affiliated with, endorsed by, or sponsored by the Typora team.
