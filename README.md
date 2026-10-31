@@ -56,6 +56,7 @@ Start with the short [User Guide](docs/user/README.md), also available offline t
   chosen from the **Themes** menu and remembered between launches.
 - **Live features** via [markdown-it](https://github.com/markdown-it/markdown-it): tables,
   strikethrough, task lists, footnotes, autolinking, typographic replacements, and emoji.
+  Task-list checkboxes are vertically centered beside the first text line, including in PDF exports.
 - **Syntax highlighting** of fenced code blocks with
   [highlight.js](https://highlightjs.org/). Each fence carries a **copy button** in its
   top-right corner, revealed on hover (or keyboard focus), that puts the block on the
@@ -121,6 +122,9 @@ npm start
 
 `npm start` bundles the renderer with [esbuild](https://esbuild.github.io/) and launches
 Electron. On first launch it opens a bundled `samples/welcome.md` demo document.
+
+Run `node --test tests/task-list-layout.test.js` to check task-list alignment in a hidden Electron window.
+This requires a graphical session, or Xvfb on Linux.
 
 #### If Electron fails to install correctly
 
