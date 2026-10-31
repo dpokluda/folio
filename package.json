@@ -1,6 +1,6 @@
 {
   "name": "folio",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A lightweight, themeable Markdown editor & viewer with a Typora-like look — edit the source, preview it rendered, swap CSS themes (Typora-theme compatible).",
   "main": "src/main.js",
   "author": {

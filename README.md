@@ -32,7 +32,7 @@ the CSS themes I already use "just work."
 After an update reaches `main`, the packaging workflow publishes **GitHub Actions artifacts**, not GitHub Releases.
 Once a run succeeds, sign in to GitHub, open this repository's **Actions > Package Folio**, select that run, and find its artifacts.
 Each successful run lists twelve individual downloads: an archive and an installer/distribution package for each OS and architecture.
-Artifact names match the package filenames, such as `Folio-1.0.0-windows-x64-setup.exe` or `Folio-1.0.0-macos-arm64.dmg`.
+Artifact names match the package filenames, such as `Folio-1.0.1-windows-x64-setup.exe` or `Folio-1.0.1-macos-arm64.dmg`.
 Download the matching file directly; the workflow does not add an outer transport ZIP.
 
 Filenames identify the source product version, OS, architecture, and package type.
@@ -184,7 +184,8 @@ node scripts/package-metadata.js       # validates source version, lock and guid
 ```
 
 The product version comes from `package.json`; it is not selected by a workflow or incremented for every build.
-Names include product version, operating system, and architecture, for example `Folio-1.0.0-macos-arm64.tar.gz`.
+Use `npm version 1.0.1 --no-git-tag-version --ignore-scripts` to set it and synchronize both product-version fields in `package-lock.json` without creating a commit or tag.
+Names include product version, operating system, and architecture, for example `Folio-1.0.1-macos-arm64.tar.gz`.
 Windows ZIPs contain the whole Electron application; keep their companion files together.
 macOS archives contain the complete `.app`, and Linux archives contain the `folio` executable and its companion files.
 The source consumer guide is copied as ordinary `README.md` resources, together with `LICENSE`, and remains accessible through Help after installation.

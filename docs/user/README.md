@@ -24,7 +24,7 @@ On Windows run `Folio.exe` and keep all companion files together; on macOS open 
 Archive use does not create a separate portable-settings mode.
 Windows setup also installs a README beside `Folio.exe`.
 The macOS DMG shows only Folio and the Applications shortcut; the copied app retains this guide through **Help > User Guide**.
-Downloads name the product version, operating system, and architecture, such as `Folio-1.0.0-windows-arm64-setup.exe`.
+Downloads name the product version, operating system, and architecture, such as `Folio-1.0.1-windows-arm64-setup.exe`.
 GitHub Actions lists each package by its filename and downloads it directly.
 Older runs may wrap packages in another ZIP; extract that outer ZIP first to get the actual package files.
 
