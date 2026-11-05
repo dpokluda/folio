@@ -5,6 +5,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const { Store } = require('./store');
 const { buildMenu } = require('./menu');
+const { withPrintDocument, pdfOptions, printDocument } = require('./printing');
 
 // ---------------------------------------------------------------------------
 // Text rendering: match Typora's lighter, smoother glyphs.
@@ -49,6 +50,7 @@ class Session {
     this.history = []; // visited file docs [{ path, anchor }], oldest -> newest
     this.historyIndex = -1; // position within history; -1 when empty
     this.windowLabel = null; // last title text shown in the Window menu list
+    this.outputInProgress = false; // one print/export preparation at a time per document
   }
 }
 
@@ -416,6 +418,7 @@ const actions = {
   format: (kind) => sendFocused('command', { name: 'format', format: kind }),
   reload: () => withSession((s) => doReload(s)),
   exportPDF: () => withSession((s) => doExportPDF(s)),
+  print: () => withSession((s) => doPrint(s)),
   newFile: () => withSession((s) => doNew(s)),
   toggleSource: () => sendFocused('command', { name: 'toggle-source' }),
   toggleOutline: () => sendFocused('command', { name: 'toggle-outline' }),
@@ -1098,37 +1101,39 @@ async function doNew(session) {
 // ---------------------------------------------------------------------------
 // Main -> renderer request/response
 //
-// A few operations (save, export) need the renderer's current editor content or
-// need it to switch out of source mode first. Rather than reach into the page
+// A few operations (save, print, export) need the renderer's current editor
+// content or a rendered document snapshot. Rather than reach into the page
 // with executeJavaScript() (which would run in the main world and bypass context
 // isolation), we send a tokened request over `folio-request` and await the reply
 // on `folio-response`. Each request is keyed to the owning window's webContents so
 // replies can't cross wires between windows.
 // ---------------------------------------------------------------------------
 let nextRequestId = 1;
-const pendingRequests = new Map(); // id -> { resolve, timer }
+const pendingRequests = new Map(); // id -> { senderId, resolve, fail, timer }
 
-ipcMain.on('folio-response', (_e, { id, value } = {}) => {
+ipcMain.on('folio-response', (event, { id, value, error } = {}) => {
   const entry = pendingRequests.get(id);
-  if (!entry) return;
+  if (!entry || entry.senderId !== event.sender.id) return;
   clearTimeout(entry.timer);
   pendingRequests.delete(id);
-  entry.resolve(value);
+  if (error) entry.fail(new Error(error));
+  else entry.resolve(value);
 });
 
-// Ask a session's renderer for something and await its reply. `kind` is
-// 'content' (the current editor text) or 'prepare-export' (leave source mode,
-// resolve true). Resolves to a fallback after a short timeout so a wedged
-// renderer can't hang a save forever.
-function ask(session, kind, { timeoutMs = 4000, fallback = null } = {}) {
-  if (!session || session.win.isDestroyed()) return Promise.resolve(fallback);
+// Printing requires a successful snapshot; saves retain their existing
+// fallback behavior when the renderer is unavailable.
+function ask(session, kind, { timeoutMs = 4000, fallback = null, required = false } = {}) {
+  if (!session || session.win.isDestroyed()) {
+    return required ? Promise.reject(new Error('The document window has closed.')) : Promise.resolve(fallback);
+  }
   const id = nextRequestId++;
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    const fail = (error) => required ? reject(error) : resolve(fallback);
     const timer = setTimeout(() => {
       pendingRequests.delete(id);
-      resolve(fallback);
+      fail(new Error('Timed out preparing the document.'));
     }, timeoutMs);
-    pendingRequests.set(id, { resolve, timer });
+    pendingRequests.set(id, { senderId: session.id, resolve, fail, timer });
     send(session, 'folio-request', { id, kind });
   });
 }
@@ -1201,30 +1206,44 @@ function pageSizeForWidth() {
 
 async function doExportPDF(session) {
   if (!session || session.win.isDestroyed()) return;
-  // Ensure the rendered preview is showing (not the source editor) before print,
-  // and that any mermaid diagrams have finished drawing. Diagrams are drawn
-  // asynchronously, so allow more time than a plain content request.
-  await ask(session, 'prepare-export', { fallback: true, timeoutMs: 20000 });
-
   const suggested = session.currentPath
     ? session.currentPath.replace(/\.[^.]+$/, '.pdf')
     : `${session.currentName || 'Untitled'}.pdf`;
-  const res = await dialog.showSaveDialog(session.win, {
-    title: 'Export to PDF',
-    defaultPath: suggested,
-    filters: [{ name: 'PDF', extensions: ['pdf'] }],
-  });
-  if (res.canceled || !res.filePath) return;
-
   try {
-    const data = await session.win.webContents.printToPDF({
-      pageSize: pageSizeForWidth(),
-      printBackground: true,
-      margins: { marginType: 'default' },
+    const res = await dialog.showSaveDialog(session.win, {
+      title: 'Export to PDF',
+      defaultPath: suggested,
+      filters: [{ name: 'PDF', extensions: ['pdf'] }],
     });
-    fs.writeFileSync(res.filePath, data);
+    if (res.canceled || !res.filePath) return;
+    await withDocumentOutput(session, 'prepare-export', async (output) => {
+      const data = await output.webContents.printToPDF(pdfOptions(pageSizeForWidth()));
+      fs.writeFileSync(res.filePath, data);
+    });
   } catch (err) {
     dialog.showErrorBox('Folio — cannot export PDF', err.message);
+  }
+}
+
+async function doPrint(session) {
+  if (!session || session.win.isDestroyed()) return;
+  try {
+    await withDocumentOutput(session, 'prepare-print',
+      (output) => printDocument(output.webContents, pageSizeForWidth()));
+  } catch (err) {
+    dialog.showErrorBox('Folio — cannot print document', err.message);
+  }
+}
+
+async function withDocumentOutput(session, kind, output) {
+  if (session.outputInProgress) throw new Error('Printing or PDF export is already in progress for this document.');
+  session.outputInProgress = true;
+  try {
+    const html = await ask(session, kind, { required: true, timeoutMs: 20000 });
+    if (typeof html !== 'string') throw new Error('The renderer did not provide a printable document.');
+    return await withPrintDocument(session.win, html, output);
+  } finally {
+    session.outputInProgress = false;
   }
 }
 

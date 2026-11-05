@@ -83,6 +83,7 @@ function buildMenu({ isMac, canInstallShellCommand, styleFamily, appearance, pag
       { label: 'Copy File Path', accelerator: 'CmdOrCtrl+Shift+C', enabled: !!hasFile, click: () => actions.copyPath() },
       { type: 'separator' },
       { label: 'Export to PDF…', click: () => actions.exportPDF() },
+      { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: () => actions.print() },
       ...shellCommandItems,
       { type: 'separator' },
       isMac ? { role: 'close' } : { role: 'quit', label: 'Quit' },

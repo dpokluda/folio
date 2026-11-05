@@ -32,7 +32,7 @@ the CSS themes I already use "just work."
 After an update reaches `main`, the packaging workflow publishes **GitHub Actions artifacts**, not GitHub Releases.
 Once a run succeeds, sign in to GitHub, open this repository's **Actions > Package Folio**, select that run, and find its artifacts.
 Each successful run lists twelve individual downloads: an archive and an installer/distribution package for each OS and architecture.
-Artifact names match the package filenames, such as `Folio-1.0.1-windows-x64-setup.exe` or `Folio-1.0.1-macos-arm64.dmg`.
+Artifact names match the package filenames, such as `Folio-1.1.0-windows-x64-setup.exe` or `Folio-1.1.0-macos-arm64.dmg`.
 Download the matching file directly; the workflow does not add an outer transport ZIP.
 
 Filenames identify the source product version, OS, architecture, and package type.
@@ -77,8 +77,13 @@ Start with the short [User Guide](docs/user/README.md), also available offline t
   following links between files.
 - **Status bar** (Typora-style) with mode-toggle buttons (Files, Outline, Source/Exit Source)
   and live document stats: word, character and line counts plus an estimated reading time.
-- **File handling**: Open, Open Folder, Open Recent, Save, Save As, and **Export to PDF** (via
-  Electron's `printToPDF`, honoring the A4 / US Letter page themes).
+- **File handling**: Open, Open Folder, Open Recent, Save, Save As, and **Export to PDF**.
+  PDF export uses a document-only page with selectable text, full pagination, theme styling, math, diagrams, and images, without app controls.
+  **File > Print…** (`Ctrl/Cmd+P`) opens the system print dialog for the current view:
+  the rendered document in preview mode, or the complete literal Markdown in source mode.
+  **Export to PDF** always exports rendered content, even from source mode.
+  Output uses A4, or US Letter when selected under Themes; Dynamic defaults to A4.
+  Printing and exporting preserve unsaved edits, editor mode, and display zoom; display zoom does not change output scale.
 - **Unsaved-changes tracking** with a title-bar indicator and a save prompt on open/close.
 - **Multiple documents at once**: `File > New Window` (`Ctrl/Cmd+Shift+N`) opens another
   window with its own document, folder, history and unsaved state. Passing a path to the
@@ -123,7 +128,13 @@ npm start
 `npm start` bundles the renderer with [esbuild](https://esbuild.github.io/) and launches
 Electron. On first launch it opens a bundled `samples/welcome.md` demo document.
 
+Before running a changed checkout, save your work and quit any installed or older running Folio instance.
+Development and installed copies share the single-instance lock.
+If an older copy is still running, `npm start` hands control to it instead of loading the updated source.
+Use **File > Quit**, then run `npm start` again and check **Help > About Folio** for the checkout's version.
+
 Run `node --test tests/task-list-layout.test.js` to check task-list alignment in a hidden Electron window.
+Run `node --test tests/printing.test.js` to check document-only pagination, rendered/source printing, and preservation of editor state.
 This requires a graphical session, or Xvfb on Linux.
 
 #### If Electron fails to install correctly
@@ -183,9 +194,12 @@ node --test tests/packaging.test.js
 node scripts/package-metadata.js       # validates source version, lock and guide
 ```
 
-The product version comes from `package.json`; it is not selected by a workflow or incremented for every build.
-Use `npm version 1.0.1 --no-git-tag-version --ignore-scripts` to set it and synchronize both product-version fields in `package-lock.json` without creating a commit or tag.
-Names include product version, operating system, and architecture, for example `Folio-1.0.1-macos-arm64.tar.gz`.
+The product version comes from `package.json`; it is not selected by a workflow or incremented for every packaging invocation.
+Each project change set increments it once after the user selects Major (breaking change), Minor (non-breaking feature), or Build/patch (bug fix without a new feature).
+An explicitly requested target version already supplies that decision.
+See [.github/copilot-instructions.md](.github/copilot-instructions.md) for the project versioning instructions.
+Use `npm version 1.1.0 --no-git-tag-version --ignore-scripts` to set it and synchronize both product-version fields in `package-lock.json` without creating a commit or tag.
+Names include product version, operating system, and architecture, for example `Folio-1.1.0-macos-arm64.tar.gz`.
 Windows ZIPs contain the whole Electron application; keep their companion files together.
 macOS archives contain the complete `.app`, and Linux archives contain the `folio` executable and its companion files.
 The source consumer guide is copied as ordinary `README.md` resources, together with `LICENSE`, and remains accessible through Help after installation.

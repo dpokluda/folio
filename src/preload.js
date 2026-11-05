@@ -23,8 +23,9 @@ contextBridge.exposeInMainWorld('folioAPI', {
       let value = null;
       try {
         value = await handler(kind);
-      } catch (_) {
-        value = null;
+      } catch (error) {
+        ipcRenderer.send('folio-response', { id, error: String(error && error.message ? error.message : error) });
+        return;
       }
       ipcRenderer.send('folio-response', { id, value });
     });

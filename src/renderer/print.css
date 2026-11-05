@@ -1,0 +1,71 @@
+/* Loaded after the theme in document-only output, never in the editor. */
+html,
+body {
+  height: auto;
+  overflow: visible;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+#write {
+  width: auto !important;
+  max-width: none !important;
+  min-height: 0;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none !important;
+}
+
+#write h1,
+#write h2,
+#write h3,
+#write h4,
+#write h5,
+#write h6 {
+  break-after: avoid;
+}
+
+#write pre,
+#write .md-front-matter {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  overflow: visible;
+  break-inside: auto;
+}
+
+#write table {
+  break-inside: auto;
+}
+
+#write tr,
+#write img,
+#write .folio-mermaid {
+  break-inside: avoid;
+}
+
+#write img {
+  max-width: 100%;
+  height: auto;
+}
+
+#write .folio-mermaid {
+  overflow: visible;
+}
+
+#folio-print-source {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  color: #000;
+  background: #fff;
+  font: 10pt/1.5 ui-monospace, "Cascadia Code", Menlo, Consolas, monospace;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  tab-size: 4;
+  break-inside: auto;
+}

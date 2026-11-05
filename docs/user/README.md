@@ -24,7 +24,7 @@ On Windows run `Folio.exe` and keep all companion files together; on macOS open 
 Archive use does not create a separate portable-settings mode.
 Windows setup also installs a README beside `Folio.exe`.
 The macOS DMG shows only Folio and the Applications shortcut; the copied app retains this guide through **Help > User Guide**.
-Downloads name the product version, operating system, and architecture, such as `Folio-1.0.1-windows-arm64-setup.exe`.
+Downloads name the product version, operating system, and architecture, such as `Folio-1.1.0-windows-arm64-setup.exe`.
 GitHub Actions lists each package by its filename and downloads it directly.
 Older runs may wrap packages in another ZIP; extract that outer ZIP first to get the actual package files.
 
@@ -66,12 +66,21 @@ Shortcuts use **Cmd** on macOS and **Ctrl** on Windows/Linux unless another key 
   With a folder open, `Ctrl/Cmd+Shift+F` searches its Markdown files.
 - **Appearance:** **Themes** selects Style, Light/Dark/System appearance, and page width.
   The choices affect both preview and source and are remembered.
-- **Export:** **File > Export to PDF** exports the rendered page using the selected page width.
+- **Export:** **File > Export to PDF** exports the complete rendered document as paginated PDF with selectable text, not a capture of the app window.
+- **Print:** **File > Print** (`Ctrl/Cmd+P`) opens the system print dialog for the current view.
+  Preview mode prints the rendered document; source mode prints the complete literal Markdown.
+  Export to PDF always exports rendered content, even while source mode is active.
 - **Another window:** **File > New Window** (`Ctrl/Cmd+Shift+N`) opens another independent document window.
   The **Window** menu switches between open windows.
 
 **Help > Markdown Formatting Tour** demonstrates supported Markdown, math, and diagrams.
 Built-in help documents open as untitled copies; Save uses Save As instead of changing the bundled originals.
+
+PDF export and printing include current unsaved edits and leave your editor mode, selection, and display zoom unchanged.
+Rendered output retains the selected theme styling, math, diagrams, and images, but excludes sidebars, status bars, and copy controls.
+Display zoom does not change the output size.
+A4 is the default paper size, including for Dynamic page width; choosing US Letter under Themes uses Letter instead.
+The system print dialog lets you choose a printer and its supported paper settings.
 
 ## From a terminal
 

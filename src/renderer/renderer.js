@@ -472,8 +472,12 @@ function renderMermaidError(el, code, err) {
 }
 
 // Awaited before PDF export so diagrams are painted before the page is printed.
-function whenMermaidSettled() {
-  return mermaidPending.catch(() => {});
+async function whenMermaidSettled() {
+  let pending;
+  do {
+    pending = mermaidPending;
+    await pending;
+  } while (pending !== mermaidPending);
 }
 
 // Diagrams bake the current appearance and body font into their SVG, so they
@@ -1206,6 +1210,7 @@ function zoom(delta) {
 // ---------------------------------------------------------------------------
 // Theme
 // ---------------------------------------------------------------------------
+let themePending = Promise.resolve();
 // The active theme is composed of an ordered stack of stylesheets (base
 // foundation → family overlay → width overlay). They are mounted as <link>
 // elements appended after app.css so the theme wins on shared selectors and
@@ -1234,7 +1239,7 @@ function applyTheme(payload) {
   }
   // A new theme can change the body font that mermaid measured against, but
   // only once its stylesheets are actually in effect.
-  Promise.all(loaded).then(refreshMermaid);
+  themePending = Promise.all(loaded).then(refreshMermaid);
 }
 
 // ---------------------------------------------------------------------------
@@ -1398,17 +1403,49 @@ function showToast(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Requests from the main process (content for save, prepare for export)
+// Requests from the main process (content for save, document-only output)
 // ---------------------------------------------------------------------------
+async function printableDocument(source = false) {
+  await themePending;
+  let content;
+  if (source) {
+    content = `<pre id="folio-print-source">${md.utils.escapeHtml(currentText())}</pre>`;
+  } else {
+    // Mermaid needs a measurable preview even while the source editor is open.
+    // Keep it invisible and leave the editor mode, selection and zoom untouched.
+    if ($preview.hidden) $preview.classList.add('folio-print-measuring');
+    try {
+      if (state.sourceMode) renderPreview();
+      await whenMermaidSettled();
+      const write = $write.cloneNode(true);
+      write.querySelectorAll('.folio-copy').forEach(button => button.remove());
+      write.querySelectorAll('input[type="checkbox"]').forEach(input => {
+        input.toggleAttribute('checked', input.checked);
+      });
+      content = write.outerHTML;
+    } finally {
+      $preview.classList.remove('folio-print-measuring');
+    }
+  }
+  const styles = source ? [] : [...document.querySelectorAll('link[rel="stylesheet"]')].map(link => link.href);
+  styles.push(new URL('print.css', location.href).href);
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8">
+    <meta http-equiv="Content-Security-Policy"
+      content="default-src 'none'; img-src file: data: https: blob:; font-src file: data:; style-src file: 'unsafe-inline';">
+    <base href="${md.utils.escapeHtml(state.baseUrl || location.href)}">
+    <title>${md.utils.escapeHtml(document.title)}</title>
+    ${styles.map(href => `<link rel="stylesheet" href="${md.utils.escapeHtml(href)}">`).join('\n')}
+    </head><body>${content}</body></html>`;
+}
+
 function handleMainRequest(kind) {
   switch (kind) {
     case 'content':
       return currentText();
     case 'prepare-export':
-      if (state.sourceMode) setSourceMode(false);
-      // Diagrams draw asynchronously; printing before they settle would
-      // capture empty placeholders.
-      return whenMermaidSettled().then(() => true);
+      return printableDocument();
+    case 'prepare-print':
+      return printableDocument(state.sourceMode);
     default:
       return null;
   }

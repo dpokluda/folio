@@ -60,6 +60,13 @@ body {
   overflow-x: hidden;
 }
 
+/* Measure diagrams for output without revealing the preview over the editor. */
+#folio-preview.folio-print-measuring {
+  display: block !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* --- YAML front matter box -----------------------------------------------
    Rendered from a leading `--- ... ---` metadata block as a subtle monospace
    panel (like Typora), instead of letting it collapse into a huge heading.
@@ -887,8 +894,7 @@ body {
 /* ==========================================================================
    Print / PDF export.
 
-   `File ▸ Export to PDF` prints the live preview, so purely interactive
-   chrome has to be taken out of the printed page.
+   Output snapshots also remove these controls from the document DOM.
    ========================================================================== */
 @media print {
   #write .folio-copy {
